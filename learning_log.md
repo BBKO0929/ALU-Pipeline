@@ -47,6 +47,7 @@
 | [8/21](#m08d21) | 刷題：複習 HDLBits 7/3 - 8/20 進度；資料：複習7/3 - 8/20 內容 |
 | [9/1](#m09d01) | 刷題：複習 HDLBits 7/3 - 8/21 進度；資料：複習7/3 - 8/21 內容 |
 | [9/3](#m09d03) | 影片：Digital Design and Computer Architecture(Spring 2025) L7 |
+| [9/14](#m09d14) | 資料：複習7/3 - 9/3 內容 |
 
 
 ---
@@ -6042,6 +6043,18 @@ FETCH → DECODE → EVALUATE ADDRESS → FETCH OPERANDS → EXECUTE → STORE R
 - **控制指令 (Control Instructions)**：允許程式進行非順序 (Out of sequence) 執行
   - 運作機制：控制指令在 **EXECUTE 階段** 透過將目標位址載入 PC 來改變程式計數器的值
   - 這會直接覆蓋/清除在 FETCH 階段時自動遞增的 PC 值，從而實現程式跳轉
+
+
+[回目錄](#toc)
+
+---
+<a id="m09d14"></a>
+
+## 2026 年 9 月 14 日
+
+## 今日進度：
+
+### 資料：複習7/3 - 9/14 內容
 
 
 [回目錄](#toc)
