@@ -6060,3 +6060,643 @@ FETCH → DECODE → EVALUATE ADDRESS → FETCH OPERANDS → EXECUTE → STORE R
 [回目錄](#toc)
 
 ---
+<a id="m09d15"></a>
+
+## 2026 年 9 月 15 日
+
+## 今日進度：
+### 資料：
+1. [Digital Design and Computer Architecture(Spring 2025)](https://safari.ethz.ch/ddca/spring2025/doku.php?id=start)
+2. [Digital Design and Computer Architecture, David Harris and Sarah Harris](https://www.sciencedirect.com/book/9780123704979/digital-design-and-computer-architecture)
+
+### 影片：
+1. [Digital Design and Computer Architecture(Spring 2025) L7](https://www.youtube.com/watch?v=T0Ka9QG9t-o&list=PL5Q2soXY2Zi9Eo29LMgKVcaydS7V1zZW3&index=9)
+
+
+## 關鍵知識/詞彙：
+### LC-3 Architecture: Jump (JMP) 指令筆記
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f2aa81a4-3c03-42d7-b8d7-1792cba3b3db" />
+
+> **核心概念**：`JMP` 是用來**改變程式指令的執行順序（控制流）**，而非修改資料。執行時會直接覆寫 **PC (Program Counter)**，讓 CPU 跳轉至指定記憶體位址繼續執行。
+
+---
+
+#### 1. JMP 指令特性
+
+* **無條件跳轉 (Unconditional Branch / Jump)**：不需檢查任何條件標誌（如 N, Z, P），執行到即強制跳轉。
+* **暫存器定址模式 (Register Addressing Mode)**：跳轉的目標位址儲存在指定的通用暫存器中（如 `R2`），運作邏輯為 `PC ← BaseR`。
+
+---
+
+#### 2. 指令格式 (16-bit Instruction Format)
+
+| Opcode (4 bits) | Unused (3 bits) | BaseR (3 bits) | Unused (6 bits) |
+| :---: | :---: | :---: | :---: |
+| `1100` | `000` | `000` ~ `111` | `000000` |
+
+* **Opcode (`1100`)**：LC-3 的 `JMP` 操作碼。
+* **BaseR**：指定存放目標記憶體位址的暫存器編號（如 `010` 代表 `R2`）。
+
+---
+
+#### 3. 相關延伸指令 (Variations)
+
+* **`RET` (Return)**：從副程式（Subroutine / Function）返回主程式。
+  * 本質為 `JMP` 的特例：固定指定 `BaseR = R7`（即 `PC ← R7`）。
+* **`JSR` / `JSRR` (Jump to Subroutine)**：呼叫副程式。
+  * 在跳轉至新位址前，會先將目前的下一行位址自動存入 `R7`（記錄返回點），以利後續搭配 `RET` 返回。
+---
+### LC-3 Architecture: Control of the Instruction Cycle (FSM)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e96b1a13-34b3-45b9-839f-8562fdf2e2ea" />
+
+> **核心概念**：LC-3 控制器本質上是一個 **有限狀態機 (Finite State Machine, FSM)**。它透過控制訊號（Control Signals）在不同狀態之間切換，驅動 CPU 完成完整的指令週期（Fetch → Decode → Execute）。
+
+---
+
+#### 1. 指令擷取階段 (FETCH Phase)
+
+| 狀態 (State) | 微操作 (Micro-operation) | FSM 控制訊號與動作 (Control Signals) |
+| :--- | :--- | :--- |
+| **State 1** | `MAR ← PC`<br>`PC ← PC + 1` | • 觸發 `GatePC` 與 `LD.MAR`（把 PC 值送到 MAR）<br>• `PCMUX` 選擇 `+1` 並觸發 `LD.PC`（PC 自動遞增 1） |
+| **State 2** | `MDR ← M[MAR]` | • 從記憶體讀取指令寫入 MDR |
+| **State 3** | `IR ← MDR` | • 觸發 `GateMDR` 與 `LD.IR`（將指令載入至 IR 準備解碼） |
+
+---
+
+#### 2. 指令解碼與執行階段 (DECODE & EXECUTE)
+
+### 解碼階段 (DECODE)
+* **State 4**：解析 IR 中的 **Opcode**，根據不同的指令跳轉至對應的執行狀態序列。
+
+### 執行階段 (EXECUTE) 範例
+* **JMP 指令分支 (State 63)**：
+  * 執行 `PC ← Register`（將指定暫存器的位址載入 PC）。
+* **其他指令分支**：
+  * **ADD**：前往 ADD 專屬的執行狀態群。
+  * **LDR**：前往 LDR 專屬的執行狀態群。
+
+---
+
+#### 3. 週期的循環機制
+
+所有指令在執行完最後一個狀態（Last state）後，控制邏輯都會**強制回到 State 1**，開始下一個指令的擷取流程。
+---
+
+### ISA (Instruction Set Architecture) 指令集架構
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/3c831096-a8e2-4e5e-9eac-3b54180d4c0d" />
+
+#### 1. 核心組成要素
+* **指令集（Instruction Set）**：CPU 支援的基本指令，包含算術運算（`ADD`）、邏輯運算（`AND`）、資料搬移（`LOAD`/`STORE`）及流程控制（`JMP`）。
+* **暫存器結構（Registers）**：定義 CPU 內部暫存器的數量、名稱與位元寬度（如 32-bit 或 64-bit）。
+* **記憶體定址模式（Addressing Modes）**：規定 CPU 如何存取與尋找記憶體中的資料位置。
+* **資料型態（Data Types）**：指定 CPU 原生支援的資料格式（如整數、單/雙精度浮點數、向量資料）。
+---
+
+#### 2. 常見的 ISA 分類
+
+| 架構類型 | 特點 | 代表性 ISA | 主要應用領域 |
+| :--- | :--- | :--- | :--- |
+| **CISC** *(複雜指令集)* | 指令功能豐富、長度不固定，單一指令可完成較多動作。 | **x86 / x86-64** | 個人電腦 (Intel/AMD)、傳統伺服器 |
+| **RISC** *(精簡指令集)* | 指令精簡且長度固定，執行效率高、功耗較低。 | **ARM**<br>**RISC-V** | 智慧型手機、Apple Silicon、嵌入式系統、開源硬體 |
+
+---
+
+#### 3. ISA vs. 微架構 (Microarchitecture)
+
+* **ISA（介面契約）**：規定 CPU **「能做什麼」**（What to do）。
+  * *範例*：定義指令 `ADD` 可以把兩個數字相加。
+* **微架構（硬體實現）**：決定 CPU **「怎麼做」**（How to do）。
+  * *範例*：Intel 與 AMD 都支援 x86 ISA（可執行相同的軟體），但兩家公司內部的電路設計與流水線（Pipeline）架構完全不同。
+---
+### ISA Concepts: Opcodes (操作碼) 
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/b1a43221-8f64-4d5f-a273-2ca5124e55a0" />
+
+> **核心概念**：Opcode（操作碼）是指令中用來指定 CPU 執行特定操作（如加法、跳轉、記憶體存取）的位元碼。指令集架構設計者可在「龐大複雜的 Opcode 集合」與「精簡基本的 Opcode 集合」之間進行設計選擇與權衡。
+
+---
+
+#### 1. Opcode 集合設計實例 (Opcode Set Sizes)
+
+不同架構對 Opcode 數量的設計哲學各有不同：
+
+* **HP Precision Architecture**：提供複合運算指令，例如單一指令完成 `A * B + C`（乘加運算 FMA）。
+* **x86 ISA**：持續擴充 Opcode 數量以支援進階運算，如多媒體與矩陣平行運算擴充集（MMX, SSE, AVX, AMX）。
+* **VAX ISA**：提供極度複雜的指令，例如單一 Opcode 即可在程式切換（Context Switch）前保存該程式的所有狀態資訊。
+
+---
+
+#### 2. 設計權衡 (Tradeoffs)
+
+選擇 Opcode 的數量與複雜度時需考慮以下權衡：
+
+| 權衡面向 | 說明 |
+| :--- | :--- |
+| **硬體複雜度 vs. 軟體複雜度** | 複雜 Opcode（CISC 哲學）可減少軟體指令數，但大幅增加硬體解碼與電路複雜度；簡化 Opcode（RISC 哲學）則硬體設計簡單，但需由軟體/編譯器組合更多指令。 |
+| **指令執行延遲 (Latency)** | 複雜指令單次執行耗時較長；簡單指令單獨執行速度快，但完成複雜功能需要多條指令配合。 |
+
+---
+
+#### 3. LC-3 與 MIPS 的指令三大分類 (Three Types of Opcodes)
+
+在 **LC-3** 與 **MIPS** 等精簡架構中，所有 Opcode 皆可歸類為以下三種基本型態：
+
+1. **Operate（運算指令）**：進行算術或邏輯資料處理（如 `ADD`, `AND`, `NOT`）。
+2. **Data Movement（資料搬移指令）**：在暫存器與記憶體或 I/O 之間傳輸資料（如 `LD`, `ST`, `LDR`）。
+3. **Control（控制指令）**：改變程式的執行流程與 PC 指標（如 `BR`, `JMP`, `JSR`）。
+---
+
+### MIPS Architecture: Instruction Types (指令格式) 
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e83a78f0-b7f9-4cd3-b7e6-6dd677925924" />
+
+> **核心概念**：MIPS 屬於 RISC 架構，所有指令長度皆固定為 **32-bit**。為了簡化硬體解碼器的設計，MIPS 將所有指令歸類為三種主要格式：**R-type**（暫存器）、**I-type**（立即數）與 **J-type**（跳轉）。
+
+---
+
+#### 1. R-type (Register Format)
+用於暫存器之間的算術與邏輯運算（如 `add`, `sub`, `and`）及位移操作。
+
+| 欄位名稱 | opcode | rs | rt | rd | shamt | funct |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **位元數** | 6 bits | 5 bits | 5 bits | 5 bits | 5 bits | 6 bits |
+
+* **`opcode` (6 bits)**：固定為 `0`。
+* **`rs` (5 bits)**：Source Register（第一個來源暫存器）。
+* **`rt` (5 bits)**：Source Register（第二個來源暫存器）。
+* **`rd` (5 bits)**：Destination Register（運算結果寫回的目的暫存器）。
+* **`shamt` (5 bits)**：Shift Amount（位移量，非位移指令時為 0）。
+* **`funct` (6 bits)**：Function Code（功能碼，當 `opcode = 0` 時，由此欄位指定具體的運算類型）。
+
+---
+
+#### 2. I-type (Immediate Format)
+用於帶有常數（立即數）的運算、記憶體存取（`lw`, `sw`）及條件跳轉（`beq`, `bne`）。
+
+| 欄位名稱 | opcode | rs | rt | immediate |
+| :---: | :---: | :---: | :---: | :---: |
+| **位元數** | 6 bits | 5 bits | 5 bits | 16 bits |
+
+* **`opcode` (6 bits)**：指定操作碼（如 `addi`, `lw`, `sw` 等）。
+* **`rs` (5 bits)**：Source Register（基底位址暫存器或第一個來源暫存器）。
+* **`rt` (5 bits)**：Target Register（接收載入資料或運算結果的暫存器）。
+* **`immediate` (16 bits)**：16 位元的常數數值或記憶體位址偏移量（Offset）。
+
+---
+
+#### 3. J-type (Jump Format)
+用於無條件大範圍跳轉指令（如 `j`, `jal`）。
+
+| 欄位名稱 | opcode | immediate |
+| :---: | :---: | :---: |
+| **位元數** | 6 bits | 26 bits |
+
+* **`opcode` (6 bits)**：指定跳轉操作碼（如 `j`）。
+* **`immediate` (26 bits)**：26 位元的目標記憶體跳轉位址（Target Address）。
+---
+### MIPS Architecture: R-Type Funct Field 
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4e445ad4-0ce2-46d7-8165-98bf81e9e612" />
+
+> **核心觀念**：
+> * **`Opcode` 固定為 0 (`000000`)**：在 MIPS 的 R-Type 指令中，`opcode` 欄位並不代表具體運算功能。
+> * **`Funct` 決定操作**：真正決定 CPU 執行何種運算（位移、跳轉、系統呼叫、乘除法等）的是 **`funct` 欄位**。
+
+---
+### Data Types & Architectural Tradeoffs 
+
+> [!NOTE]
+> **核心概念**：指令集架構（ISA）定義了 CPU 原生支援的資料型態（Data Types）。支援更多資料型態是**程式設計師 (Programmer)** 與 **微架構師 (Microarchitect)** 之間的權衡（Tradeoff）。
+
+---
+
+#### 常見 ISA 的資料型態支援對比
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/6b9149e5-fca0-4092-80c4-ff047e15ba4b" />
+
+| ISA 架構 | 支援的資料型態 (Data Types) | 說明 / 數學公式 |
+| :--- | :--- | :--- |
+| **LC-3** | • **2's complement integers** *(二補數整數)* | 僅支援有號整數。<br>取負數（Negative）運算式：`X_neg = NOT(X) + 1` |
+| **MIPS** | • **2's complement integers** *(二補數整數)*<br>• **Unsigned integers** *(無號整數)*<br>• **Floating point** *(浮點數)* | 支援多元型態，能直接進行無號數運算與浮點數算術。 |
+
+---
+
+#### 為何 ISA 需要不同的資料型態？ (Tradeoffs)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/381b8ffc-273b-41a6-9f85-b755de89646c" />
+
+#### 1. 優點：對軟體/程式員有利 (Programmer Advantage)
+* **更佳的高階語言映射**：硬體能直接處理高階程式語言中的資料結構，縮短軟體與硬體間的抽象差距。
+* **減少指令數量與程式碼體積 (Code Size)**：
+  * *矩陣運算*：單一專用指令即可完成，無需拆解為多條獨立的 `multiply` / `add` / `load` / `store` 指令。
+  * *圖形運算*：原生支援複雜資料結構，避免大量基礎存取指令組合。
+
+#### 2. 缺點：對硬體/微架構師不利 (Microarchitect Disadvantage)
+* **大幅增加微架構設計工作量**：硬體工程師必須在晶片電路中實現支援這些資料型態的 ALU、暫存器與複雜控制邏輯。
+
+---
+
+#### 架構設計核心權衡總結
+
+在設計 ISA 的資料型態時，主要考量以下兩項權衡：
+
+1. **硬體複雜度 vs. 軟體複雜度 (Hardware vs. Software Complexity)**  
+   * 支援更多型態 $\rightarrow$ 硬體變複雜，軟體/編譯器變簡單。  
+   * 支援較少型態 $\rightarrow$ 硬體極簡，軟體需用多條基礎指令組合成複雜運算。
+2. **運算延遲 (Latency of Operations)**  
+   * **原生支援型態**：直接經由專用硬體電路執行，延遲低、速度快。  
+   * **非原生支援型態**：需透過軟體演算法用多條指令模擬（如 LC-3 用軟體模擬浮點數），執行延遲極高。
+---
+
+### Data Types and Instruction Complexity (Semantic Gap) 筆記
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d544e7be-67f3-424b-bbbd-231f4569c262" />
+
+> [!NOTE]
+> **核心概念**：**語意隙縫（Semantic Gap）** 是指「CPU 指令與資料型態」和「高階程式語言（如 C++, Java, Python）」之間的抽象距離。資料型態的複雜度直接決定了指令集的語意層級（Semantic Level）。
+
+---
+
+#### 1. 語意隙縫 (Semantic Gap) 的分類對比
+
+| 類型 | 小語意隙縫 (Small Semantic Gap) | 大語意隙縫 (Large Semantic Gap) |
+| :--- | :--- | :--- |
+| **指令與資料型態** | 複雜指令 + 複雜資料型態 | 簡單指令 + 簡單資料型態 |
+| **硬體與高階語言關係** | 硬體指令極度貼合高階語言的操作邏輯，單一指令可完成高階數據結構動作。 | 硬體僅提供極簡基本功能，高階語言的複雜動作需由軟體/編譯器拆解成多條指令。 |
+| **常見動作範例** | • 插入資料至雙向鏈結串列 (Doubly linked list)<br>• 矩陣相乘 (Multiply two matrices) | • 原始基礎運算：`load`, `store`, `add`, `multiply`, `nor` |
+| **代表性 ISA / 架構** | **VAX ISA**<br>*(原生支援雙向鏈結串列、多維陣列指令)* | **Early RISC Machines**<br>*(早期 RISC 晶片僅原生支援整數型態與基礎操作)* |
+
+---
+
+#### 2. 觀念總結
+
+* **CISC 哲學（小型 Semantic Gap）**：試圖縮小硬體與高階語言之間的距離，讓硬體做更多複雜的事，減輕編譯器負擔。
+* **RISC 哲學（大型 Semantic Gap）**：保持硬體極簡與高執行效率，將複雜的語意轉換留給軟體與編譯器處理。
+---
+### Complex vs. Simple Instructions 筆記
+
+> [!NOTE]
+> **核心概念**：指令集架構設計的核心哲學在於「指令的粒度大小」。**複雜指令 (Complex Instruction)** 試圖單次完成大量工作；**精簡指令 (Simple Instruction)** 則提供最基礎的原生操作，由軟體組合出複雜功能。
+
+---
+
+#### 1. 複雜指令 vs. 精簡指令定義
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/494f418a-0c6c-437b-a313-4919378c2772" />
+
+| 類型 | 特點說明 | 具體範例 |
+| :--- | :--- | :--- |
+| **Complex Instruction**<br>*(複雜指令)* | 單一指令可完成**大量工作與多個操作**（Does a lot of work）。 | • 插入資料至雙向鏈結串列 (`Insert in a doubly linked list`)<br>• 計算快速傅立葉變換 (`Compute FFT`)<br>• 字串複製 (`String copy`)<br>• 矩陣相乘 (`Matrix multiply`) |
+| **Simple Instruction**<br>*(精簡指令)* | 單一指令僅完成**極少工作**（Does little work），作為構建複雜運算的基本原語（Primitive）。 | • 加法 (`Add`)<br>• 互斥或邏輯運算 (`XOR`)<br>• 乘法 (`Multiply`) |
+
+---
+
+#### 2. 複雜指令 + 資料型態的優缺點分析
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/b380f473-1bb0-44d9-8087-e37b3c02f403" />
+
+####  優點 (Advantages)
+* **更緊密的編碼 (Denser encoding)** $\rightarrow$ **程式碼體積更小 (Smaller code size)**：
+  * **提高記憶體利用率** (Better memory utilization)。
+  * **節省晶片外頻寬** (Saves off-chip bandwidth)。
+  * **提升快取命中率** (Better cache hit rate)。
+* **簡化編譯器設計 (Simpler compiler)**：編譯器只需將高階語法對應至對應的複雜指令，不需花費大量精力進行微小指令層級的優化。
+
+####  缺點 (Disadvantages)
+* **限制編譯器的優化彈性 (Less optimization opportunity)**：
+  * 由於指令封裝了較大區塊的工作（Larger chunks of work），編譯器無法進行精細粒度（Fine-grained）的指令重排與平行優化。
+* **大幅增加硬體複雜度 (More complex hardware)**：
+  * 將高階語意解碼並轉換為底層控制訊號（Control signals）的重擔全轉移至硬體，且硬體必須獨自承擔動態執行的優化責任。
+
+#### Aside
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e10950c3-22a0-477a-9493-db2db70a65b5" />
+---
+# ISA Concepts: Addressing Modes (尋址模式) 筆記
+
+> [!NOTE]
+> **核心概念**：**尋址模式（Addressing Mode）** 是 CPU 指令用來**指定運算元（Operand）存放位置**的機制。不同的尋址模式決定了資料是如何被尋找與讀取的（從指令內部、暫存器，或是記憶體中）。
+
+---
+
+### LC-3 與 MIPS 的尋址模式比較
+
+#### LC-3 支援的 5 種尋址模式
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/596c839c-5285-484a-8227-70ab29db183d" />
+
+1. **Immediate / Literal (立即數/常數)**：運算元直接包含在指令本身的位元段中。
+2. **Register (暫存器)**：運算元儲存於通用暫存器（`R0` ~ `R7`）中。
+3. **Memory Addressing (記憶體尋址，包含 3 種)**：
+   * **PC-relative (PC 相對尋址)**：以 PC 當前位址加上 Offset 算出記憶體位址。
+   * **Indirect (間接尋址)**：指令指向的記憶體位址中，存放著「真正的目標位址」。
+   * **Base+offset (基底加偏移量)**：指定基底暫存器加上 Offset 算出記憶體位址。
+
+#### MIPS 的尋址模式特性
+* 額外支援 **Pseudo-direct addressing (偽直接尋址)**：專門用於無條件跳轉指令（`j` 與 `jal`）。
+* **不支援** Indirect addressing (間接尋址)：為了保持硬體設計簡單，避免多次存取記憶體。
+
+---
+
+#### 為何需要不同的尋址模式？ (Tradeoffs)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/298c79dd-fd0b-4706-8b0e-0c2131d1d262" />
+
+提供多元尋址模式是 **程式設計師 (Programmer)** 與 **微架構師 (Microarchitect)** 之間的權衡：
+
+#### 1. 優點：對軟體/程式員有利
+* **更佳的高階語言映射**：某些資料結構的操作透過特定的尋址模式表達更為自然直覺。
+* **減少指令數量與程式碼體積 (Reduced Code Size)**：
+  * **一維/多維陣列索引 (Array indexing)**
+  * **指標式存取 (Pointer-based / Indirection)**
+  * **矩陣與稀疏矩陣元素索引 (Matrix & Sparse matrix indexing)**
+
+#### 2. 缺點：對硬體與編譯器不利
+* **增加微架構師工作量**：硬體電路必須加入更多算術單元（如 Adder）與多工器（MUX）來計算複雜位址。
+* **增加編譯器決策複雜度**：編譯器有太多尋址選擇，需要花費更多運算來決定最優化的指令組合。
+
+---
+
+##### 尋址模式與語意隙縫 (Semantic Gap)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/547a453b-a740-4768-8a72-5c4561ce5a31" />
+
+| 語意隙縫類型 | 尋址模式特性 | 特點 |
+| :--- | :--- | :--- |
+| **Small Semantic Gap** *(小語意隙縫)* | 複雜指令 + 複雜型態 + **多元尋址模式** | 貼近高階語言語法（如直接支援指標間接存取），但硬體控制邏輯變得非常複雜。 |
+| **Large Semantic Gap** *(大語意隙縫)* | 精簡指令 + 簡單型態 + **精簡尋址模式** | 距離高階語言較遠，高階指標操作需拆成多條基礎指令，但極度貼近底層硬體控制訊號。 |
+---
+
+### LC-3 & MIPS: Operate Instructions (運算指令)
+<img width="961" height="717" alt="image" src="https://github.com/user-attachments/assets/e37551bb-00e2-475e-a7e6-c9a80b843c55" />
+
+> [!NOTE]
+> **核心概念**：**運算指令（Operate Instructions）** 用於對資料進行算術或邏輯運算。不同架構在運算指令的豐富度上差異顯著：**LC-3** 僅提供 3 種最基本的運算指令，而 **MIPS** 則提供豐富的 R-type、I-type 以及浮點數（F-type）運算指令。
+
+---
+
+#### LC-3 的運算指令 (僅 3 種)
+
+LC-3 的運算指令極為精簡，僅包含單元運算與二元運算：
+
+| 指令 | 操作類型 (Operation Type) | 來源運算元數量 | 說明與邏輯 |
+| :---: | :---: | :---: | :--- |
+| **`NOT`** | **Unary** *(單元運算)* | 1 個 | 執行位元反轉 (Bitwise NOT)。 |
+| **`ADD`** | **Binary** *(二元運算)* | 2 個 | 執行二補數加法 (2's complement addition)。 |
+| **`AND`** | **Binary** *(二元運算)* | 2 個 | 執行位元及運算 (Bitwise AND，即 `SR1 & SR2`)。 |
+
+---
+
+#### MIPS 的運算指令 (多樣化支援)
+
+相較於 LC-3，MIPS 提供更全面且豐富的運算指令種類：
+
+* **R-type 運算指令** *(二元運算)*：
+  * 支援多種暫存器之間的算術與邏輯運算，例如 `add`, `and`, `nor`, `xor` 等。
+* **I-type 運算指令** *(立即數版本)*：
+  * 為 R-type 指令對應的立即數變體，其中一個來源運算元為指令內嵌的常數（Immediate Operand），例如 `addi`, `andi`, `xori` 等。
+* **F-type 運算指令** *(浮點數運算)*：
+  * 專門用於處理浮點數算術（Floating-point operations）。
+
+---
+
+#### LC-3 vs. MIPS 運算指令對比
+
+| 對比面向 | LC-3 | MIPS |
+| :--- | :--- | :--- |
+| **運算指令數量** | 極少（僅 3 種：`ADD`, `AND`, `NOT`） | 豐富（涵蓋多種算術、邏輯、位移與比較） |
+| **立即數支援 (Immediate)** | `ADD` 與 `AND` 可帶 5-bit 立即數 | 提供完整專屬的 I-type 立即數指令 (16-bit) |
+| **浮點數支援 (Floating Point)** |  無（需透過軟體演算法模擬） |  原生支援（專屬 F-type 浮點數指令集） |
+---
+
+### LC-3 Architecture: Immediate Mode Operations (ADD & AND) 
+
+> [!NOTE]
+> **核心概念**：LC-3 的運算指令（`ADD` 與 `AND`）支援**立即數模式 (Immediate Mode / Literal)**。透過將指令的 **Bit[5] 設為 `1`**，運算元可以直接取用指令內含的 5 位元常數（`imm5`），不需再存取第二個暫存器。`imm5` 必須先經過**符號擴充 (Sign-Extension, SEXT)** 轉為 16-bit 後方能送入 ALU 計算。
+
+---
+
+#### 指令格式 (16-bit Instruction Format)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/585b4b8a-712c-47dd-a625-60918d9d8d03" />
+
+| 欄位名稱 | OP (Opcode) | DR (Destination) | SR1 (Source 1) | Mode Flag | imm5 (Literal) |
+| :---: | :---: | :---: | :---: | :---: | :---: |
+| **位元範圍** | Bit [15:12] | Bit [11:9] | Bit [8:6] | Bit [5] | Bit [4:0] |
+| **寬度** | 4 bits | 3 bits | 3 bits | 1 bit | 5 bits |
+| **說明** | 操作碼 (`0000`~`1111`) | 目的暫存器 (`R0`~`R7`) | 第一來源暫存器 | **固定為 `1`** | 5-bit 二補數常數 |
+
+---
+
+#### 支援指令與運算邏輯
+
+* **`ADD` (Opcode = `0001`)**：
+  * **微操作邏輯**：$\text{DR} \leftarrow \text{SR1} + \text{sign-extend}(\text{imm5})$
+* **`AND` (Opcode = `0101`)**：
+  * **微操作邏輯**：$\text{DR} \leftarrow \text{SR1} \text{ AND } \text{sign-extend}(\text{imm5})$
+
+---
+
+#### 實例解析：`ADD R1, R4, #-2`
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/1ab7af3a-efd5-4ce3-bab1-512d9f33540d" />
+
+#### 機器碼轉換 (Machine Code Breakdown)
+
+| 欄位 | OP | DR | SR1 | Flag | imm5 |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **語意** | `ADD` | `R1` | `R4` | 立即數模式 | `-2` |
+| **十進位/符號** | 1 | 1 | 4 | 1 | -2 |
+| **二進位機器碼** | `0001` | `001` | `100` | `1` | `11110` |
+
+* **完整 16-bit 機器碼**：`0001 001 100 1 11110`
+
+---
+
+#### 硬體資料路徑 (Datapath Execution Flow)
+
+1. **符號擴充 (SEXT)**：`imm5` 數值 `11110` (-2) 經由 SEXT 電路擴充成 16-bit 的 `1111111111111110`。
+2. **多工器選擇 (MUX Selection)**：Bit[5] 為 `1`，訊號控制 MUX 切換至 `1` 號通道，選擇將擴充後的立即數送入 ALU 的 B 端輸入。
+3. **ALU 計算**：
+   * **Input A**：從 Register File 讀取 `R4` 的值。
+   * **Input B**：16-bit 符號擴充後的 `-2`。
+   * **Operation**：ALU 執行加法運算。
+4. **結果寫回 (Writeback)**：ALU 運算結果寫回 Register File 中的指定目的暫存器 `R1` (DR)。
+---
+
+### Instructions with One Literal in MIPS（I-type 指令）
+
+#### 格式
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f34342fc-4ae4-49e4-aa22-4f61bac70d91" />
+
+I-type 指令包含 2 個暫存器運算元 + 1 個立即值（immediate）。
+
+| 欄位   | opcode | rs    | rt    | imm    |
+|--------|--------|-------|-------|--------|
+| 位元數 | 6 bits | 5 bits| 5 bits| 16 bits|
+
+- **opcode**：運算類型（operation）
+- **rs**：來源暫存器（source register）
+- **rt**：
+  - 在部分指令中是**目的暫存器**（如 `addi`, `lw`）
+  - 在部分指令中是**來源暫存器**（如 `sw`）
+- **imm**：立即值 / literal
+
+---
+
+#### 範例：ADD Immediate（addi）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e9e4763f-c0ba-423b-931c-b76fea712c50" />
+
+**組合語言：**
+```asm
+addi $s0, $s1, 5
+```
+
+**運算語意：** rt ← rs + sign-extend(imm)
+
+#### 解析對照
+- `addi` 的 opcode = `8` → 二進位 `001000`
+- `$s1` = 暫存器 17 → `10001`
+- `$s0` = 暫存器 16 → `10010`
+- 立即值 `5` → 16-bit sign-extend → `0000 0000 0000 0101`
+---
+### MIPS vs. LC-3 減法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/98df4c95-05a7-4a97-ad63-859cbe0a22dc" />
+
+#### 減法指令的有無
+
+| 架構 | SUB 指令 | 減法立即值指令 |
+|------|----------|----------------|
+| MIPS |  有 `sub` |  無 `subi`（不需要） |
+| LC-3 |  無 |  無 |
+
+#### 各架構如何做減法
+
+**MIPS**：直接用 `sub` 指令
+```asm
+sub $s3, $t0, $s2
+```
+
+**LC-3**：沒有減法指令，靠「取二補數再相加」
+```asm
+NOT R4, R3        ; 先取反
+ADD R5, R4, #1    ; 再+1 → 得到二補數
+ADD R6, R2, R5    ; 相加 = 相減
+```
+
+#### 立即值減法怎麼辦（a = b - 3）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8856abbc-cb0b-454a-b4e5-058648e42cc1" />
+
+
+兩者都不需要額外的減法立即值指令，直接用**加法指令 + 負數**：
+
+- MIPS：`addi $s1, $s0, -3`
+- LC-3：`ADD R1, R0, #-3`
+
+#### 核心觀念
+
+- **MIPS**：有 sub，但省略 subi，因為 addi 的立即值本身可正可負
+- **LC-3**：連 sub 都省略，用 NOT + ADD #1 組出二補數
+- **共同設計哲學**：硬體只需要「加法器」，減法用二補數轉換即可完成 → 簡化控制邏輯，代價是指令數變多（尤其 LC-3）
+---
+### Data Movement Instructions
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f515f61f-ecfc-41a1-9a42-70de57219bea" />
+
+#### LC-3 資料搬移指令
+LC-3 共有七種資料搬移指令：
+```
+LD, LDR, LDI, LEA, ST, STR, STI
+```
+
+#### Load / Store 指令格式
+
+| 欄位 | 位元範圍 |
+|------|----------|
+| Opcode | [15:12] |
+| DR 或 SR | [11:9] |
+| Address generation bits | [8:0] |
+
+**四種定址模式（Addressing Modes）**：
+1. PC-Relative Mode
+2. Indirect Mode
+3. Base+Offset Mode
+4. Immediate Mode
+
+#### MIPS 對照
+MIPS 的 load/store 指令只有兩種定址模式：
+- Base + offset
+- Immediate
+
+---
+### Base+Offset 與 Immediate Mode 
+
+#### Base+Offset Mode（LDR/STR）
+- 語意：`DR ← Memory[BaseR + sign-extend(offset6)]`
+- 跟 PC-Relative 的差別：基準點是**暫存器**而非 PC，所以能指向記憶體中任何位置
+- **MIPS 的 `lw`/`sw` 就是同一種模式**，這是 LC-3 與 MIPS 唯一共通的定址方式
+
+#### Immediate Mode（LEA）
+- 語意：`DR ← PC + sign-extend(PCoffset9)`
+- 跟 PC-Relative（LD）長得很像，但**關鍵差異：LEA 不存取記憶體**，只是把算出來的位址本身存進暫存器（所以叫 Load *Effective Address*）
+- MIPS 沒有 LEA，而是用 `lui` + `ori` 組出 32-bit 常數
+
+---
+
+#### 四種定址模式總表（核心重點）
+
+| 定址模式 | 指令 | 基準 | 讀記憶體次數 |
+|----------|------|------|--------------|
+| PC-Relative | LD/ST | PC | 1 |
+| Indirect | LDI/STI | PC → 再讀一次 | 2 |
+| Base+Offset | LDR/STR | 暫存器 | 1 |
+| Immediate | LEA | PC | 0（只算位址） |
+
+**重點結論**：MIPS 只留 Base+Offset 和 Immediate 兩種，捨棄 PC-Relative 和 Indirect —— 呼應 RISC「精簡指令、用多道指令組合出複雜功能」的設計哲學。
+---
+
+### Control Flow Instructions 重點
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c9de9077-d218-4d90-a4c3-b3a9f7e99ed3" />
+
+- 功能：讓程式可以**不按順序執行**（out of sequence）
+- 分兩大類：**條件分支（Conditional branches）**、**無條件跳躍（Unconditional jumps）**
+
+#### 條件分支
+- 用途：做決策（例如 if-else）
+- LC-3 用**三個 condition codes** 來實現
+
+#### 跳躍（Jumps）
+- 用途：實作 **迴圈（Loops）** 與 **函式呼叫（Function calls）**
+- 對應指令：LC-3 的 `JMP`、MIPS 的 `j`
+---
+
+### Conditional Control Flow（Conditional Branching）
+
+#### 1. Condition Codes（LC-3 獨有機制）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/0188304f-7c29-416c-a2c7-7be7945d2b5f" />
+
+- 每次寫入任何 GPR（R0-R7）時，會自動更新 3 個單一位元的 condition code：**N（負）、Z（零）、P（正）**
+- 三者互斥，同時只會有一個被 set：
+  - 寫入值 < 0 → N=1
+  - 寫入值 = 0 → Z=1
+  - 寫入值 > 0 → P=1
+- **x86、SPARC** 也是使用 condition code 機制的例子（MIPS 沒有這個機制）
+
+#### 2. LC-3 的條件分支：BR 系列
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/2a0e1264-95ba-440d-8502-3804ec1cce1f" />
+
+- **n, z, p**（指令位元）：決定這次分支要「測試」哪些 condition code
+- **N, Z, P**（實際狀態暫存器的值）：目前的條件狀態
+
+**思考題（重點）：**
+- `n=z=p=1`（即 `BRnzp`）→ 不管條件為何都成立 → **等同無條件跳躍**
+- `n=z=p=0` → 沒有任何條件被測試 → **恆不跳躍（等同 no-op）**
+
+#### 3. MIPS 的條件分支：beq（Branch if Equal）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/5273da99-0f4d-4cc7-a710-c8f3f1a29b3c" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/fe5db9fd-d0ac-4284-b274-4e125af65b5e" />
+
+- 直接比較兩個暫存器：`rs == rt`
+- `PC ← PC + sign-extend(offset) * 4`（乘 4，因為位址以 byte 為單位，指令固定 4 bytes）
+- 變化：`beq, bne, blez, bgtz`
+
+#### 4. LC-3 vs. MIPS 設計理念比較
+
+| 比較項目 | LC-3 | MIPS |
+|----------|------|------|
+| 判斷依據 | 隱含的 condition code（N/Z/P） | 直接比較兩個暫存器 |
+| 條件產生時機 | ALU 每次寫暫存器時自動更新 | 分支指令本身內建比較邏輯 |
+| 額外硬體需求 | 需要 3 個狀態暫存器並隨時同步更新 | 不需要額外狀態，但分支指令要做比較運算 |
+
+**核心結論**：LC-3 用「隱式狀態（condition codes）」做分支判斷，MIPS 用「顯式比較（直接比較兩暫存器）」——這是 ISA 設計哲學的又一次體現，也是許多現代 ISA（如 RISC-V）選擇捨棄 condition code 機制的原因之一。
+---
+
+
+[回目錄](#toc)
+
+---
