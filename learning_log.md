@@ -6070,7 +6070,7 @@ FETCH → DECODE → EVALUATE ADDRESS → FETCH OPERANDS → EXECUTE → STORE R
 2. [Digital Design and Computer Architecture, David Harris and Sarah Harris](https://www.sciencedirect.com/book/9780123704979/digital-design-and-computer-architecture)
 
 ### 影片：
-1. [Digital Design and Computer Architecture(Spring 2025) L7](https://www.youtube.com/watch?v=T0Ka9QG9t-o&list=PL5Q2soXY2Zi9Eo29LMgKVcaydS7V1zZW3&index=9)
+1. [Digital Design and Computer Architecture(Spring 2025) L8](https://www.youtube.com/watch?v=o2YvlUCv9d4&list=PL5Q2soXY2Zi9Eo29LMgKVcaydS7V1zZW3&index=10)
 
 
 ## 關鍵知識/詞彙：
