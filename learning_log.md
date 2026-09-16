@@ -1,4 +1,4 @@
-<img width="957" height="713" alt="image" src="https://github.com/user-attachments/assets/65c4f173-e959-4134-9511-9216259e12d0" /># 暑假自主研究與學習、Debug日誌
+# 暑假自主研究與學習、Debug日誌
 - **[點我回「README.md」](./README.md)**
 
 
