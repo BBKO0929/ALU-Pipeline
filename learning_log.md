@@ -1,4 +1,4 @@
-# 暑假自主研究與學習、Debug日誌
+<img width="957" height="713" alt="image" src="https://github.com/user-attachments/assets/65c4f173-e959-4134-9511-9216259e12d0" /># 暑假自主研究與學習、Debug日誌
 - **[點我回「README.md」](./README.md)**
 
 
@@ -49,6 +49,8 @@
 | [9/3](#m09d03) | 影片：Digital Design and Computer Architecture(Spring 2025) L7 |
 | [9/14](#m09d14) | 資料：複習7/3 - 9/3 內容 |
 | [9/15](#m09d15) | 影片：Digital Design and Computer Architecture(Spring 2025) L8 |
+| [9/16](#m09d16) | 影片：Digital Design and Computer Architecture(Spring 2025) L9 |
+
 
 ---
 
@@ -6694,6 +6696,382 @@ MIPS 的 load/store 指令只有兩種定址模式：
 | 額外硬體需求 | 需要 3 個狀態暫存器並隨時同步更新 | 不需要額外狀態，但分支指令要做比較運算 |
 
 **核心結論**：LC-3 用「隱式狀態（condition codes）」做分支判斷，MIPS 用「顯式比較（直接比較兩暫存器）」——這是 ISA 設計哲學的又一次體現，也是許多現代 ISA（如 RISC-V）選擇捨棄 condition code 機制的原因之一。
+---
+
+
+[回目錄](#toc)
+
+---
+<a id="m09d16"></a>
+
+## 2026 年 9 月 16 日
+
+## 今日進度：
+### 資料：
+1. [Digital Design and Computer Architecture(Spring 2025)](https://safari.ethz.ch/ddca/spring2025/doku.php?id=start)
+2. [Digital Design and Computer Architecture, David Harris and Sarah Harris](https://www.sciencedirect.com/book/9780123704979/digital-design-and-computer-architecture)
+
+### 影片：
+1. [Digital Design and Computer Architecture(Spring 2025) L9](https://www.youtube.com/watch?v=l8KpCtprJpc&list=PL5Q2soXY2Zi9Eo29LMgKVcaydS7V1zZW3&index=11)
+
+
+## 關鍵知識/詞彙：
+### How to Change the Semantic Gap Tradeoffs
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e2ca1fd4-76f2-4023-adcc-1e6d3c9f2788" />
+
+#### 核心概念與階層架構
+* **核心策略**：Translate from one ISA into a different "implementation" ISA（將源 ISA 轉譯為不同的實作 ISA）。
+* **HLL (High-Level Language)**：高階程式語言層。
+* **X86-64 (複雜 ISA)**：
+  * 包含複雜指令（Complex Inst）、資料型別與定址模式。
+  * 與 HLL 之間的語意落差較小 (**Small Semantic Gap**)。
+* **Software or Hardware Translator (軟體或硬體轉譯器)**：位於兩層 ISA 之間，負責將複雜指令轉換為簡化指令。
+* **ARM v8.4 (Implementation ISA / 實作 ISA)**：
+  * 採用簡化的指令、資料型別與定址模式。
+* **HW Control Signals (硬體控制訊號)**：最底層，直接驅動硬體運作的控制訊號。
+
+#### Example
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/86231892-35d9-4937-9236-b7a7ad052f55" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/538a1bb2-c359-4ef9-af92-b159d433ab45" />
+
+#### 1. 核心機制與 DCO 任務
+
+* **設計理念**：放棄傳統複雜的硬體亂序執行（Out-of-Order）設計，採用大型順序執行（In-Order）核心，並將指令排列與優化的重任交給軟體層。
+* **Dynamic Code Optimizer (DCO)**：軟體層的核心推手，主要執行兩大任務：
+    * **指令轉譯**：將 ARM 指令集轉譯為 Denver 本地的原生格式（Native Format）。
+    * **程式碼最佳化**：挖掘單一執行緒中的指令級平行度（ILP），並重新排列指令以避開硬體停頓（Stalls）。
+
+#### 2. 動態最佳化流程與技術 (Optimize Once, Use Many Times)
+
+* **運作機制**：硬體解碼器與執行單元收集動態輪廓資訊（Dynamic Profile Information），送交 Optimizer 生成最佳化微碼（Optimized µcode），並快取於 **Optimization Cache** 以供重複調用。
+* **主要優化技術**：
+      * **迴圈展開**（Unrolls Loops）與**暫存器重命名**（Renames registers）
+      * **載入與儲存重排**（Reorders Loads and Stores）
+      * **改善控制流程**（Improves control flow）
+      * **移除無用計算**（Removes unused computation）
+      * **提昇冗餘計算**（Hoists redundant computation）與**下移罕見執行計算**（Sinks uncommonly executed computation）
+      * **改善指令排程**（Improves scheduling）
+---
+### Principle: Indirection
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/2854a977-ba74-4f16-8d72-bd84e3958d21" />
+
+#### 核心概念與權衡
+
+* **經典名言**：「計算機科學中的任何問題，都可以透過增加另一個間接層來解決。」（"Any problem in computer science can be solved with another level of indirection."）
+  * **提出者**：David Wheeler（引用自 Butler Lampson 的 *"Principles for Computer Systems Design"*）
+* **主要優勢**：引進間接層後，系統設計的權衡關係將被改變，並能開啟新的功能與架構可能性。
+* **主要代價**：間接性會帶來額外的**複雜度（Complexity）**與**延遲（Latency）**。
+* **後續應用**：此原則將在後續討論**虛擬記憶體（Virtual Memory）**時再次出現。
+
+---
+### ISA-level Tradeoffs: Number of Registers
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/aae92f1d-6457-4b79-a2fc-2fe8db4dc07b" />
+
+#### 影響層面 (Affects)
+
+* **位址編碼**：編碼暫存器位址所需的位元數（Bits）。
+* **高速儲存容量**：能同時保留在高速儲存區（Register File）中的數值數量。
+* **微架構成本**：暫存器檔案（Register File）的實體大小、存取時間（Access Time）與功耗（Power Consumption）。
+
+#### 暫存器數量多的優缺點 (Large number of registers)
+
+* **優點 (+)**：
+  * 允許編譯器進行更佳的**暫存器分配（Register Allocation）**與優化，進而減少記憶體存取（Fewer saves/restores）。
+* **缺點 (-)**：
+  * **指令長度變大**（Larger instruction size）。
+  * **暫存器檔案尺寸變大**（Larger register file size）。
+
+* **案例對比**：此權衡關係先前已在 **LC-3 vs MIPS** 的比較中展現。
+  
+---
+### 馮紐曼架構 vs. 資料流模型（Dataflow Model）
+
+#### 1. 核心執行機制對比
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a516b309-2cb3-4a53-9b4a-60ad9e08c2df" />
+
+* **馮紐曼模型（Von Neumann Model）**
+  * **控制流驅動（Control Flow）**：指令執行嚴格依循 **程式計數器（Program Counter, PC）** 的定序。除非遭遇轉移指令，否則預設為單線順序執行。
+  * **狀態隱喻**：將程式視為一連串對記憶體位置進行讀寫與改寫的狀態轉移過程。
+
+* **資料流模型（Dataflow Model）**
+  * **資料流驅動（Data Flow）**：**完全取消 PC** 的概念。指令的觸發（Fire）純粹取決於「所需運算元（Operands）是否已全部到位」。
+  * **相依性導向**：指令不關心執行順序，僅宣告計算結果要傳送給誰。只要資料相依性滿足，該節點即可立即運算，本質上具備極高的指令級平行度（ILP）。
+
+---
+
+#### 2. 計算流程範例解析
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/0218847e-0e22-48a8-915b-d682afd7353c" />
+
+以計算式 `z = (a + b - b * 2) * (a + b + b * 2)` 為例：
+
+* **順序執行邏輯（馮紐曼）**：
+  必須被強制拆解為 5 個有嚴格前後順序的步驟：`v = a + b` $\rightarrow$ `w = b * 2` $\rightarrow$ `x = v - w` $\rightarrow$ `y = v + w` $\rightarrow$ `z = x * y`。即便部分步驟彼此獨立，受限於單線 PC，硬體仍被迫按順序擷取與執行。
+* **圖形執行邏輯（資料流）**：
+  將計算表達為**有向無環圖（DAG）**：
+  * **Stage 1（無相依）**：`a + b` 與 `b * 2` 可同時並行計算。
+  * **Stage 2（相依於 Stage 1）**：`v - w` 與 `v + w` 可同時並行計算。
+  * **Stage 3（相依於 Stage 2）**：執行最後的乘法產出 `z`。
+
+---
+
+#### 3. 架構權衡與現代處理器啟示
+
+* **程式設計直覺**：馮紐曼模型貼近人類的步驟式思維（Mental Model），變數與指令順序易於除錯與追蹤；資料流模型雖然最符合數學邏輯，但對於大型軟體開發與狀態管理極為抽象。
+* **硬體實作成本**：純 Dataflow 架構需要昂貴的資料比對與派發機制（Token Matching），維護資料傳送網路的複雜度過高。
+* **現代微架構折衷**：現代高效能 CPU（如 Out-of-Order 亂序執行核心）本質上是**「上層介面呈現馮紐曼 ISA，底層微架構以 Dataflow 方式執行」**的混合體，藉此兼具軟體相容性與硬體平行度。
+
+---
+### 資料流架構（Dataflow Architecture）
+
+#### 1. 節點觸發與 ISA 指令格式設計
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/9be297f0-264a-4718-b11d-1a1ad69c58f1" />
+
+* **Token 驅動（Token-Driven）**：資料流節點（Node）不依賴 PC 定序，僅在所有輸入端均收到 **Token**（代表運算元 Ready）時被觸發（Fire）並執行。
+* **反向定址（Push-based Routing）**：
+  * **傳統 ISA**：指令指定「從哪裡（暫存器/記憶體）讀取輸入」。
+  * **Dataflow ISA**：格式包含 `[Opcode | Ready Bit | Argument | Dest. Of Result]`。計算結果不存回暫存器，而是直接 **Push（推送）** 到後續目標指令的輸入欄位中。
+
+---
+
+#### 2. 資料流程式邏輯分析
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7b4e6a1d-97ed-439a-b457-5addf0adc82e" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/aac42ea6-e257-4a45-a98f-091cb9a6ca27" />
+
+* **控制流的資料化**：資料流架構沒有傳統的分支指令（Jump/Branch），而是利用 **Branch 節點（BR）** 結合布林值 Token 來導向資料（True 走迴圈，False 走輸出）。
+* **圖形執行流程（以輸入 $N$ 與初始值 $1$ 為例）**：
+  1. **條件判斷**：檢查目前 $N$ 是否 $> 0$，產生 Bool Token 送入 BR 節點。
+  2. **迴圈疊代（$N > 0$）**：當判斷為 True，將累乘值與 $N$ 送入乘法器（`*`），同時對 $N$ 進行減一操作（`DEC`），結果重新迴送至輸入端。
+  3. **終止輸出（$N \le 0$）**：當判斷為 False，BR 節點將最終累乘結果導向 `OUT`。
+* **演算法解析**：此資料流圖實現的是 **階乘計算（Factorial）**，故 `OUT` 的數值為 **$N!$**（當 $N=0$ 時輸出 $1$）。
+
+---
+
+#### 3. 硬體實作挑戰與權衡
+
+* **Token Matching 開銷**：硬體必須建立動態匹配儲存器（Matching Store）來比對並集齊不同指令所需的 Token。當程式規模放大時，Token 匹配與搜尋的開銷會急劇膨脹。
+* **資料複製與路由成本**：為了將同一份資料傳給多個不同節點，必須顯式引入 **Copy 節點**，這會產生額外的指令與傳輸開銷。
+
+---
+### ISA 階層設計與微架構（Microarchitecture）解耦權衡
+
+#### 1. ISA 階層的抉擇：是否引入程式計數器（PC）？
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/470c526d-f977-4077-9f01-8bcd3155c47d" />
+
+* **有 PC（Control-Driven / 順序執行）**
+  * **機制**：指令由 PC 定序，預設順序遞增執行。
+  * **優勢**：開發直覺，編譯器設計相對簡單，除錯與狀態追蹤容易。
+  * **劣勢**：強加了順序限制，隱蔽了潛在的指令級平行度（ILP）。
+
+* **無 PC（Data-Driven / 資料流執行）**
+  * **機制**：取消 PC，指令僅在運算元 Ready 時自動觸發。
+  * **優勢**：極大化平行度擷取（Parallelism Extraction）。
+  * **劣勢**：軟體維護困難、狀態不易追蹤，硬體 Token Matching 複雜度過高。
+
+---
+
+#### 2. 四大維度架構權衡（High-Level Tradeoffs）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/0338921f-0859-46e2-96dc-82cc8e8e6249" />
+
+選擇 Control-Driven 或 Data-Driven 必須評估以下關鍵指標：
+
+| 評估維度 | Control-Driven (有 PC) | Data-Driven (無 PC) |
+| :--- | :--- | :--- |
+| **程式設計難易度** | 高（符合傳統步驟式思維） | 低（複雜的狀態與資料流追蹤） |
+| **編譯器開發難易度** | 低（對應傳統語法架構） | 高（需拆解為複雜數據流圖） |
+| **平行度擷取能力** | 低（受限於單線 PC） | 極高（本質並行） |
+| **硬體控制複雜度** | 低（簡單 Fetch/Decode） | 高（需要動態 Token 匹配機制） |
+
+---
+
+#### 3. 核心觀念：ISA 契約與微架構實作的解耦
+
+* **ISA 層（Programmer-Visible Contract）**：
+  * 定義了**「軟體視角看到的執行順序」**。若 ISA 承諾的是順序模型，程式員只需假設指令是依序執行的。
+* **微架構層（Underlying Implementation）**：
+  * 決定**「硬體實際上的執行機制」**。
+* **微架構黃金法則（Sequential Illusion）**：
+  微架構可以用**任何順序**（如以 Dataflow 方式進行 Out-of-Order 亂序執行）來處理指令；只要在將結果提交並更新至軟體可見的狀態時（State Commitment），**嚴格維持 ISA 承諾的語意順序**即可。
+
+---
+### 現代馮紐曼抽象與「電腦架構」定義演進技術
+
+#### 1. 現代處理器中的馮紐曼模型：介面與實作的解耦
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/ad46829f-451c-49b2-b118-5ae4428d2bbd" />
+
+* **介面層（ISA）的統一**：幾乎所有現代主流 ISA（如 x86、ARM、MIPS、RISC-V、POWER 等）在對外呈現的軟體介面上均採用馮紐曼模型。
+* **實作層（Microarchitecture）的演進**：微架構底層運作早已偏離傳統馮紐曼模型的單線順序執行，關鍵演進包含：
+  * **流水線化（Pipelining）**：如 Intel 80486，將指令執行階段重疊。
+  * **多指令並行（Superscalar）**：如 Intel Pentium，單週期可發射多條指令。
+  * **亂序執行（Out-of-Order Execution）**：如 Intel Pentium Pro，打破程式順序以極大化平行度。
+  * **獨立 Cache 架構**：採用分離的指令與資料快取（具備哈佛架構特徵）以消除記憶體存取瓶頸。
+* **核心價值（Abstraction Barrier）**：底層所有非馮紐曼模型的運作細節皆對軟體**完全隱蔽**，成功讓軟體享有簡單的順序程式設計模型，同時硬體獲得極致的執行效能。
+
+---
+
+#### 2. 「電腦架構（Computer Architecture）」定義的範疇演進
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/26d76dea-4395-4621-8760-a1c225354b2f" />
+
+* **傳統定義（狹義 / ISA-Only，Gene Amdahl, 1964）**
+  * **定義範疇**：僅涵蓋「程式員所能看到的系統屬性（Conceptual Structure & Functional Behavior）」。
+  * **核心概念**：將介面規範與底層的資料流組織、控制邏輯及實體硬體實作明確劃分開來。
+
+* **現代定義（廣義 / ISA + Implementation）**
+  * **定義範疇**：結合軟硬體介面設計（ISA）與硬體組件的選擇、互連與優化實作。
+  * **核心目標**：電腦架構是一門平衡的科學與藝術，旨在系統性地滿足**功能（Functional）**、**效能（Performance）**、**功耗（Energy Consumption）**與**成本（Cost）**等多維度工程目標。
+
+---
+### 微架構（Microarchitecture）與 ISA 關係深層解析
+
+#### 1. 微架構的本質與「一線多實作」
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/97093bed-9ea6-4ed0-acce-3159ec918e8f" />
+
+* **微架構（$\mu$arch）定義**：ISA 是軟硬體的協定與抽象介面，而微架構則是該介面在硬體電路上的**具體實作方式（Implementation）**。
+* **一對多關係（One-to-Many Mapping）**：同一個 ISA 可以擁有無數種完全不同的微架構實作：
+  * **x86 家族**：從早期的 Intel 80486、Pentium，到現代的 Golden Cove、Sapphire Rapids 以及 AMD Ryzen，全都執行同一套 x86 ISA，但內部的微架構設計已翻新數十代。
+  * **ARM 家族**：包含注重省電的 Cortex-M 系列、高效能 Cortex-A 系列，以及 Apple 的 A 系列與 M 系列晶片、NVIDIA Denver 等。
+
+---
+
+#### 2. 「油門與引擎」類比：介面契約與實作自由度
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d0b0f563-2c7e-497f-9fc5-3bbd16c88cfd" />
+
+* **直覺類比**：
+  * **ISA（油門踏板）**：提供給駕駛（程式員/編譯器）的控制介面，定義「踩下踏板等於加速」的規範。
+  * **微架構（引擎內部構造）**：實現「加速」的具體機械結構（如直列四缸、V8 雙渦輪、純電馬達）。駕駛不需要知道引擎如何運作，只需會踩油門。
+* **實作自由度（Implementation Freedom）**：
+  只要微架構嚴格遵守 ISA 所規範的結果與行為，硬體設計者擁有完全的自由度去替換底層電路。
+  * **指令級範例**：ISA 僅定義 `ADD` 加法指令，但微架構可以選擇採用 **波紋進位加法器（Ripple Carry Adder）**、**先行進位加法器（Carry Lookahead Adder）** 或 **位元串列加法器（Bit Serial Adder）** 來實現。
+
+---
+
+#### 3. 核心思考：為什麼微架構的演進速度遠快於 ISA？
+
+投影片提出了一個關鍵問題：**「市場上有極少的 ISA（x86, ARM, RISC-V），卻有數不清的微架構，為什麼？」**
+
+* **1. 軟體生態與後向相容性（Software Compatibility）**
+  * 修改 ISA 的成本極其昂貴，因為這意味著整個軟體生態系（編譯器、作業系統、所有應用程式）都需要重新編譯或重寫。為了維護數十年累積的軟體資產，ISA 必須保持高度穩定。
+* **2. 半導體技術與物理極限的驅動（Hardware Technology Scaling）**
+  * 摩爾定律與製程演進（如 7nm $\rightarrow$ 3nm）讓電晶體預算大幅增加，硬體設計者必須持續推出新的微架構（如引入流水線、多指令發射、亂序執行、分支預測器）來將物理資源轉化為實際效能。
+* **3. 市場分眾與權衡需求（Trade-off Diversity）**
+  * 同一個 ISA 需要覆蓋從「毫瓦級嵌入式裝置」到「百萬瓦級超級電腦」的需求。設計者透過調整微架構（如順序執行 vs. 亂序執行、快取大小、管線深度），可在功耗、成本與效能之間做出最佳權衡，而無須改變軟體層面的 ISA。
+
+---
+### 微架構範疇與 ISA 屬性判別技術
+
+#### 1. 微架構的核心邊界與技術範疇
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/53a2052e-9738-4d8b-9ccd-4fe945d65027" />
+
+* **微架構邊界原則**：凡是**「在硬體層級實作、且對上層軟體完全透明（Transparent to Software）」**的設計，均屬於微架構範疇。
+* **微架構涵蓋的關鍵技術**：
+  * **執行與平行度優化**：流水線（Pipelining）、順序/亂序執行（In-order vs. Out-of-order）、超純量（Superscalar）多指令發射、投機執行（Speculative Execution）。
+  * **記憶體子系統**：快取架構設計（層級、容量、組相聯度、替換策略）、資料預擷取（Prefetching）、記憶體存取調度策略。
+  * **能耗與可靠度管理**：時脈門控（Clock Gating）、動態電壓/頻率調整（DVFS）、硬體除錯與錯誤修正（ECC/Error Correction）。
+
+---
+
+#### 2. ISA vs. 微架構（$\mu$arch）屬性判別對照表
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/657666ce-652e-4f0c-b185-c9beedbd2d39" />
+
+理解兩者區分的關鍵在於：**「軟體/程式員是否能直接感知或存取該屬性？」**
+
+| 屬性項目 | 歸屬層級 | 判別說明與理由 |
+| :--- | :--- | :--- |
+| **ADD 指令的 Opcode** | **ISA** | 軟體/編譯器必須精確知道機器碼格式才能產生可執行的二進位檔案。 |
+| **ALU 加法器類型**<br>*(Bit-serial / Ripple-carry / CLA)* | **微架構** | 硬體邏輯閘的實現方式，完全不影響軟體執行的邏輯結果。 |
+| **通用暫存器數量** | **ISA** | 暫存器名稱與數量（如 $R_0 \sim R_{31}$）會直接暴露在組合語言中供程式員使用。 |
+| **MUL 指令執行的 Clock Cycles 數** | **微架構** | 指令執行所需的時間週期屬於硬體效能實作細節，不影響 ISA 語意。 |
+| **暫存器檔案的 Ports 數量** | **微架構** | 暫存器檔案（Register File）開了幾個 Read/Write Ports 是硬體並行讀取的設計。 |
+| **是否採用流水線執行（Pipelining）** | **微架構** | 流水線重疊執行指令的過程對程式員隱蔽，軟體看到的仍是指令逐條生效。 |
+| **程式計數器（Program Counter, PC）** | **ISA** | PC 代表系統當前的控制狀態，可被分支指令修改或被除錯器（Debugger）讀取。 |
+
+---
+
+#### 3. 設計約束與目標（Design Constraints & Goals）
+
+* **微架構的核心任務**：微架構並非獨立存在，而是工程師在特定的 **PPA（Performance, Power, Area / 效能、功耗、面積）** 與成本/可靠度約束下，實現 ISA 規範的最佳化解法。
+* **解耦的效益**：正因為微架構能將流水線、快取與亂序執行等複雜技術隱藏在 ISA 介面之下，處理器廠商才能在不破壞舊有軟體生態的情況下，持續透過微架構創新提升晶片效能。
+
+---
+### 設計點（Design Point）與權衡決策
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/15e714c0-d2c7-480f-aca2-b8235a8a254f" />
+
+* **核心定義**：由「問題空間（Application Space）」與「目標市場/使用者」所決定的一組設計考量與優先順序，直接主導 ISA 與微架構層面的權衡（Trade-offs）。
+* **多維度評估指標**：
+  * **效能與能耗**：算力效能（Performance）、峰值功耗/散熱限制（Thermal）、能量效率與續航（Energy/Battery Life）。
+  * **成本與時程**：晶片開發與製造成本（Cost）、產品上市時間（Time to Market）。
+  * **品質與安全**：系統可用性（Availability）、可靠度與正確性（Reliability & Correctness）、安全性與可預測性（Security & Predictability）。
+
+---
+
+### 電腦架構的「藝術」本質（Why Is It Art?）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/494d8d4d-19fd-4f99-8c85-627f2af45386" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a2227e51-e513-40c6-8620-c231e7a04d5c" />
+
+* **樞紐定位**：架構師位於軟硬體抽象層級（Stack）的核心交會點（ISA & Microarchitecture），負責銜接上層應用與底層硬體。
+* **非確定性決策**：未來的軟體應用、市場趨勢與物理製程皆處於持續變動且無法完全預知的狀態，無法單靠公式導出唯一解答，需要前瞻性的權衡判斷。
+
+---
+
+### 架構師的雙向前瞻觀照機制（Look Up & Down, Forward）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e248cc8b-8470-477b-a281-6c90536c076c" />
+
+* **Look Up and Forward（向上前瞻）**：
+  * **目標**：持續觀察並預測上層軟體與使用者側的動態演變。
+  * **範疇**：新興演算法、程式語言、執行時期系統（Runtime System）、應用問題空間以及使用者行為特質的改變。
+* **Look Down and Forward（向下前瞻）**：
+  * **目標**：持續掌握並預測底層硬體物理極限與新技術發展。
+  * **範疇**：邏輯設計（Logic）、電路結構（Circuits）、物理電子特性（Electrons）的新能力與限制。
+
+---
+### 機器指令處理與狀態轉換機制技術
+
+#### 1. ISA 視角的指令處理：抽象有限狀態機（Abstract FSM）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/040dce08-2332-4e86-901f-bbc2bc18f88b" />
+
+* **狀態轉換公式**：指令執行的本質即為結構狀態的轉移 $AS \rightarrow AS'$。
+  * **$AS$ (Architectural State)**：指令執行前「軟體/程式員可見」的系統狀態（如暫存器、PC、記憶體內容）。
+  * **$AS'$ (Architectural State')**：指令執行完成後「軟體/程式員可見」的新狀態。
+* **原子性與單次躍遷（Atomic & Single Transition）**：
+  * 在 ISA 的抽象定義中，指令執行具備**原子性**，不存在任何「中間狀態（Intermediate States）」。
+  * 軟體視角下，每執行一條指令僅發生一次狀態轉移。
+
+---
+
+#### 2. 微架構視角的實作：微架構狀態（Microarchitectural State, MS）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7b7ee914-5ab8-4c08-974f-1709f820b91d" />
+
+* **解耦與效能優化**：微架構負責實現 $AS$ 如何轉變為 $AS'$，為了極大化執行速度，硬體可自由引入軟體不可見的**微架構狀態（MS）**。
+* **狀態轉移策略選擇**：
+  * **單週期模型（Single-Cycle）**：硬體於單一 Clock Cycle 內直接完成 $AS \rightarrow AS'$ 轉換。
+  * **多週期/流水線模型（Multi-Cycle / Pipelined）**：指令執行跨越多個 Clock Cycles，歷經一系列內部狀態轉移（$AS \rightarrow AS+MS_1 \rightarrow AS+MS_2 \dots \rightarrow AS'$），最後才正式 Commit 至 $AS'$。
+* **關鍵約束**：無論硬體內部經過多複雜的中間狀態（$MS$），最終提交的結果必須嚴格契合 ISA 規範所定義的 $AS'$ 語意。
+
+---
+### 單週期指令處理引擎（Single-Cycle Engine）核心機制
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/cba15f03-ec3d-495f-83c8-2c486f0c52e3" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/57e0f979-30b3-408b-b825-910f8c8e0c44" />
+
+* **單週期執行約束 (Single-Cycle Execution)**：每條指令從擷取、解碼到執行的完整過程，必須嚴格限制在單一 Clock Cycle 內完成。
+* **純組合邏輯路徑 (Pure Combinational Logic)**：控制與算術路徑完全由組合邏輯組成，執行過程中不存在任何中間暫存或軟體不可見的微架構狀態（No Intermediate States）。
+* **狀態同步轉換 (Synchronous State Transition)**：
+  * **週期開始 (Clock Start)**：硬體讀取當前的結構狀態 $AS$。
+  * **週期結束 (Clock End)**：組合邏輯訊號穩定後，於時脈邊緣（Clock Edge）將計算結果一次性鎖存至新的結構狀態 $AS'$。
+
+---
+### 單週期與多週期架構對比（Single-cycle vs. Multi-cycle Machines）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c14cdeb0-574b-4c8e-b205-8a49e7407f7b" />
+
+* **單週期機器 (Single-Cycle Machines)**：
+  * **執行機制**：每條指令於單一 Clock Cycle 內執行完畢，所有狀態更新於指令執行結束時完成。
+  * **關鍵缺點**：時脈週期時間（Cycle Time）受限於**最慢的指令**，導致 Clock Cycle Time 過長且整體效率低落。
+
+* **多週期機器 (Multi-Cycle Machines)**：
+  * **執行機制**：將指令處理切割為多個 Clock Cycles / 階段（Stages）分步執行。
+  * **狀態更新**：執行期間可進行微架構內部狀態的更新，但**結構狀態（Architectural State）**仍於指令最後結束時統一更新。
+  * **核心優勢**：時脈週期時間僅需由**最慢的單一階段（The slowest "stage"）**決定，顯著提升時脈頻率。
+
+* **模型合規性**：無論是單週期還是多週期架構，在微架構層級（Microarchitecture Level）皆嚴格遵循馮紐曼模型（von Neumann Model）的順序執行語意。
+
 ---
 
 
