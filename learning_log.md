@@ -1,4 +1,4 @@
-<img width="1201" height="895" alt="image" src="https://github.com/user-attachments/assets/715a6c2d-078f-4bb3-b26f-cc09d0cb6f7e" /># 暑假自主研究與學習、Debug日誌
+# 暑假自主研究與學習、Debug日誌
 - **[點我回「README.md」](./README.md)**
 
 
@@ -7079,9 +7079,9 @@ MIPS 的 load/store 指令只有兩種定址模式：
 [回目錄](#toc)
 
 ---
-<a id="m09d03"></a>
+<a id="m09d19"></a>
 
-## 2026 年 9 月 3 日
+## 2026 年 9 月 19 日
 
 ## 今日進度：
 ### 刷題：複習 HDLbits - Shift Registers
