@@ -1,4 +1,4 @@
-# 暑假自主研究與學習、Debug日誌
+<img width="1201" height="895" alt="image" src="https://github.com/user-attachments/assets/715a6c2d-078f-4bb3-b26f-cc09d0cb6f7e" /># 暑假自主研究與學習、Debug日誌
 - **[點我回「README.md」](./README.md)**
 
 
@@ -50,6 +50,7 @@
 | [9/14](#m09d14) | 資料：複習7/3 - 9/3 內容 |
 | [9/15](#m09d15) | 影片：Digital Design and Computer Architecture(Spring 2025) L8 |
 | [9/16](#m09d16) | 影片：Digital Design and Computer Architecture(Spring 2025) L9 |
+| [9/19](#m09d19) | 影片：Digital Design and Computer Architecture(Spring 2025) L10 |
 
 
 ---
@@ -7074,6 +7075,481 @@ MIPS 的 load/store 指令只有兩種定址模式：
 
 ---
 
+
+[回目錄](#toc)
+
+---
+<a id="m09d03"></a>
+
+## 2026 年 9 月 3 日
+
+## 今日進度：
+### 刷題：複習 HDLbits - Shift Registers
+### 資料：
+1. [Digital Design and Computer Architecture(Spring 2025)](https://safari.ethz.ch/ddca/spring2025/doku.php?id=start)
+2. [Digital Design and Computer Architecture, David Harris and Sarah Harris](https://www.sciencedirect.com/book/9780123704979/digital-design-and-computer-architecture)
+
+### 影片：
+1. [Digital Design and Computer Architecture(Spring 2025) L10](https://www.youtube.com/watch?v=DbnRJRfKhM4&list=PL5Q2soXY2Zi9Eo29LMgKVcaydS7V1zZW3&index=13)
+
+
+## 關鍵知識/詞彙：
+### 指令處理引擎的核心組成（Datapath vs. Control Logic）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8d514319-da87-41dd-b174-4b7e2685a22b" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/b7ae0550-a291-4ed7-871d-5b5b516b227b" />
+
+指令執行的本質，是由功能單元將資料從原始狀態轉換至新狀態。一個完整的指令處理引擎可拆解為 **Datapath** 與 **Control Logic** 兩大硬體模組：
+
+* **資料路徑（Datapath）**：負責實際儲算、傳送與轉換資料訊號的硬體組件。
+  * **功能單元（Functional Units）**：對資料執行具體算術與邏輯運算（如 ALU）。
+  * **流向傳輸結構（Hardware Structures）**：引導資料流向運算單元與暫存器的硬體通路，包含導線（Wires）、多工器（Muxes）、解碼器（Decoders）與三態緩衝器（Tri-state buffers）。
+  * **儲存單元（Storage Units）**：存放資料狀態的硬體元件（如 Registers）。
+
+* **控制邏輯（Control Logic）**：負責決策與發號施令的硬體組件。
+  * **控制訊號產生**：根據指令內容解碼並產生控制訊號（Control Signals），指示 Datapath 各元件應該對資料執行何種動作。
+---
+### 效能分析與量化模型 (Performance Analysis)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/63144dc1-f21a-4808-ac74-887ccacdaa69" />
+
+#### 1. 執行時間計算公式
+* **單一指令執行時間**： $\text{CPI} \times \text{Clock Cycle Time}$ 
+* **程式總執行時間**： $\text{Instruction Count} \times \text{Average CPI} \times \text{Clock Cycle Time}$
+---
+
+#### 2. 單週期 vs. 多週期效能權衡
+
+| 架構類型 | CPI 特性 | Clock Cycle Time | 核心瓶頸 / 優勢 |
+| :--- | :--- | :--- | :--- |
+| **單週期 (Single-cycle)** | 固定 $\text{CPI} = 1$ | 長（受限於最慢指令） | 簡單指令被迫陪慢指令發呆 |
+| **多週期 (Multi-cycle)** | 可變 CPI（追求低 $\text{Average CPI}$ ） | 短（僅受限於最慢單一步驟） | **具備 2 個獨立優化槓桿** |
+
+---
+
+#### 3. 多週期架構的兩大優化槓桿 (Two Degrees of Freedom)
+* **縮短 Cycle Time**：週期時間只需滿足最慢的「單一階段」，大幅提升系統主頻。
+* **優化 Average CPI**：簡單指令少走幾週期、複雜指令多走幾週期，拉低整體平均 CPI。
+---
+
+### 單週期微架構設計基礎 (Single-Cycle Microarchitecture)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/18c0488d-0648-4658-a6b0-c91e6fc2928b" />
+
+#### 1. 核心狀態元件與存取語意 (State Elements & Timing Semantics)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/43375a76-7f9a-4525-b014-320285d80c5e" />
+
+* **狀態元件構成**：
+  * **PC (Program Counter)**： $32 \text{-bit}$ 暫存器，儲存當前指令位址。
+  * **Instruction Memory**：僅需讀取埠（輸入位址，組合邏輯輸出指令）。
+  * **Register File**：包含 32 個 $32 \text{-bit}$ 暫存器，具備 2 個讀取埠 (Read Ports) 與 1 個寫入埠 (Write Port)。
+  * **Data Memory**：具備讀寫能力，由寫入使能訊號（Write Enable, WE）控制。
+
+* **關鍵 Timing 語意假設**：
+  * **組合邏輯讀取 (Combinational Read)**：讀取為非同步/純組合邏輯行為，只要位址輸入穩定，資料經傳播延遲（Propagation Delay）後即可直接輸出。
+  * **同步寫入 (Synchronous Write)**：寫入必須由**時脈正邊緣 (Rising Clock Edge)** 觸發（當使能訊號激活時），確保同一週期內不會因中間寫入污染讀取結果。
+
+---
+
+#### 2. 單週期記憶體模型之理想假設
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/bcd30440-dbfe-4628-8d0f-05c9170f5f84" />
+
+
+* **無握手協定 (No Handshaking / Ready Signal)**：假設記憶體與暫存器極快且能在單一 Cycle 內穩定完成，無需透過 `Ready` 等握手訊號讓 CPU 暫停（Stall）或等待。
+* **時脈邊緣定界**：硬體臨界路徑（Critical Path）必須能完整涵蓋「讀取指令 $\rightarrow$ 解碼 $\rightarrow$ 運算 $\rightarrow$ 讀寫記憶體 $\rightarrow$ 寫回」的全套組合邏輯延遲。
+
+---
+
+#### 3. 指令處理五大通用階段 (5 Generic Execution Steps)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/bdc84e17-1eac-47e1-a034-a972320f407a" />
+
+單週期 Datapath 將每條指令的執行邏輯拆解為以下五個標準區塊：
+
+1. **IF (Instruction Fetch)**：根據 PC 從指令記憶體取出指令，並計算下一個 PC 位址。
+2. **ID/RF (Instruction Decode / Register Fetch)**：解碼指令並從 Register File 讀取來源運算子。
+3. **EX/AG (Execute / Address Generation)**：ALU 執行算術/邏輯運算，或計算記憶體存取位址。
+4. **MEM (Memory Access)**：對 Data Memory 進行讀取（Load）或寫入（Store）。
+5. **WB (Writeback)**：將運算結果或記憶體讀出資料寫回至 Register File。
+---
+
+### 算術與邏輯指令之單週期資料路徑設計 (R-Type & I-Type Datapath)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a10b0215-ea9a-4b82-9d44-e10cd0b53e11" />
+
+#### 1. R-Type 指令資料路徑 (純暫存器算術/邏輯)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/36b10586-8c6c-4210-ae04-4f93f0b131ae" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/5b94980e-e1bb-4049-b7fc-7d919f9cee1f" />
+
+
+* **執行語意**： $\text{GPR}[rd] \leftarrow \text{GPR}[rs] + \text{GPR}[rt]$ 且 $\text{PC} \leftarrow \text{PC} + 4$
+* **基本路徑設計**：
+  * **PC 更新**：透過獨立加法器於單一週期內完成 $\text{PC} + 4$ 計算。
+  * **暫存器存取**：由指令 $\text{bits}[25:21]$ ($rs$) 與 $\text{bits}[20:16]$ ($rt$) 讀取兩組來源運算子；目的暫存器位址固定由 $\text{bits}[15:11]$ ($rd$) 指定。
+  * **ALU 運算與寫回**：ALU 直接接收兩組暫存器輸出進行運算，運算結果直接拉回 Register File 的寫入埠，並透過控制訊號 $\text{RegWrite} = 1$ 觸發寫入。
+
+---
+
+#### 2. 整合 I-Type 指令之資料路徑擴充 (R-Type + I-Type)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/814070a9-535d-4bd0-a4ec-dcfe3eef9177" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/fb41c875-889c-44aa-b891-934728a8bfda" />
+
+
+* **執行語意 (如 ADDI)**： $\text{GPR}[rt] \leftarrow \text{GPR}[rs] + \text{SignExtend}(\text{Immediate})$ 且 $\text{PC} \leftarrow \text{PC} + 4$
+* **硬體衝突與 MUX 解決機制**：
+  為讓同一套硬體同時支援 R-Type 與 I-Type 指令，必須透過多工器（MUX）進行硬體資源共享與訊號路由：
+
+| 硬體衝突點 | 解決機制 | 控制訊號與選擇邏輯 |
+| :--- | :--- | :--- |
+| **目的暫存器位址衝突** | 導入 **RegDest MUX** | R-Type 切換至 $\text{bits}[15:11]$ ($rd$)；I-Type 切換至 $\text{bits}[20:16]$ ($rt$) |
+| **ALU 第二輸入源衝突** | 導入 **ALUSrc MUX** | R-Type 選擇暫存器讀出資料 2；I-Type 選擇 $32\text{-bit}$ 擴充後的立即數 |
+| **立即數寬度不匹配** | 導入 **Sign Extend Unit** | 將 $16\text{-bit}$ 立即數（$\text{bits}[15:0]$）進行 2 的補數符號擴充至 $32\text{-bit}$ |
+
+---
+
+#### 3. 硬體設計權衡 (Engineering Trade-offs)
+
+* **硬體復用（Resource Reuse）**：透過在關鍵節點插入 MUX，用極小面積代價使 ALU 與 Register File 可同時處理暫存器與立即數型態的指令。
+* **組合邏輯延遲（Combinational Delay）**：新增的 MUX 與 Sign Extend 單元增加了信號傳播路徑（Propagation Path），會微幅拉長組合邏輯穩定所需的時間，進而影響單週期的 Clock Cycle Time 下限。
+---
+#### Data Movement 指令格式與語意
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7423d0ab-a9a9-4e6a-91df-02698b1ffba9" />
+
+#### 1. Load 指令 (`lw`)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a7b73ba5-be39-4d9a-9b54-aeab0d04fa24" />
+
+* **語法與編碼**：`lw $rt, offset($rs)`（例如 `lw $s3, 8($s0)`），屬於 **I-Type** 指令，Opcode 為 **35**。
+* **欄位結構**：`op` (31-26) | `rs` (base, 25-21) | `rt` (target, 20-16) | `offset` (15-0)。
+* **硬體執行語意**：
+  1. $\text{PC} \leftarrow \text{PC} + 4$
+  2. $\text{address} = \text{sign-extend}(\text{offset}) + \text{GPR}[\text{base}]$
+  3. $\text{GPR}[\text{rt}] \leftarrow \text{MEM}[\text{address}]$
+
+#### 2. Store 指令 (`sw`)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d6886f75-49ce-4c63-ae39-54d348a5f90e" />
+
+* **語法與編碼**：`sw $rt, offset($rs)`（例如 `sw $s3, 8($s0)`），屬於 **I-Type** 指令，Opcode 為 **43**。
+* **欄位結構**：`op` (31-26) | `rs` (base, 25-21) | `rt` (source, 20-16) | `offset` (15-0)。
+* **硬體執行語意**：
+  1. $\text{PC} \leftarrow \text{PC} + 4$
+  2. $\text{address} = \text{sign-extend}(\text{offset}) + \text{GPR}[\text{base}]$
+  3. $\text{MEM}[\text{address}] \leftarrow \text{GPR}[\text{rt}]$
+
+---
+
+### Load-Store Datapath 硬體架構與控制訊號
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/13a58cd2-6203-4764-8caa-76c1cf152125" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/5b9ccb2d-429f-45c7-af99-f7ce5d3346fd" />
+
+#### 1. 關鍵硬體元件與資料傳輸
+
+* **PC 加法器**：固定輸入 4，計算下一條指令位址 ($\text{PC} + 4$)。
+* **Sign Extend**：將指令中 16-bit 的 offset 擴充為 32-bit 符號數，提供給 ALU 計算位址。
+
+#### 2. 控制訊號與多工器 (MUX) 切換邏輯
+* **`RegDest` (`isItype`) MUX**：
+  * **0 (R-Type)**：選擇位元 15-11 (`rd`) 作為寫入暫存器目標。
+  * **1 (I-Type/Load)**：選擇位元 20-16 (`rt`) 作為寫入暫存器目標。
+* **`ALUSrc` (`isItype`) MUX**：
+  * **0 (R-Type)**：選擇暫存器讀出的 `Read data 2` 進行算術運算。
+  * **1 (I-Type)**：選擇擴充後的 **32-bit 立即數 (`Sign extend`)** 與 `Read data 1` 相加計算記憶體位址。
+* **`MemtoReg` (`isLoad`) MUX**：
+  * **0 (R-Type)**：將 **`ALU result`** 寫回暫存器。
+  * **1 (Load)**：將 Data Memory 讀出的 **`Read data`** 寫回暫存器。
+* **記憶體讀寫與暫存器寫入控制**：
+  * **`MemRead` (`isLoad`)**：Load 指令時設為 1，允許從 Data Memory 讀取。
+  * **`MemWrite` (`isStore`)**：Store 指令時設為 1，允許寫入 Data Memory。
+  * **`RegWrite` (`!isStore`)**：Store 指令時設為 0，避免錯將資料寫入暫存器檔案中。
+---
+#### Read data 1 與 Read data 2 解析
+
+在暫存器檔案（Registers）中，這兩者皆為從暫存器讀出的 **32-bit 資料數值**：
+
+* **Read data 1**
+  * **來源**：由 `Read register 1` 輸入的暫存器編號（對應指令中的 $rs$ / `base` 欄位）決定。
+  * **去向**：直接傳入 **ALU 的第一個輸入端**。
+  * **用途**：在 `lw` / `sw` 指令中作為記憶體計算的基底位址（Base Address）；在 R-Type 指令中作為第一個算術/邏輯運算元。
+
+* **Read data 2**
+  * **來源**：由 `Read register 2` 輸入的暫存器編號（對應指令中的 $rt$ 欄位）決定。
+  * **去向與用途（雙路徑）**：
+    1. **流向 `ALUSrc` MUX**：若是 R-Type 指令，經多工器選取後傳入 ALU 作為第二個運算元。
+    2. **流向 `Data memory` 的 `Write data`**：若是 Store 指令（`sw`），此數值即為準備寫入記憶體的數據內容。
+
+---
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4ea721f2-0f28-465a-ae83-35ad45ca38fc" />
+
+### 1. 無條件跳轉指令 (Unconditional Jump: `j`)
+
+#### 指令格式與語意 (J-Type)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/833a9d49-aed2-483b-b712-8b881379701c" />
+
+* **語法與格式**：`j target`，屬於 J-Type 指令，Opcode 為 2 (6-bit)，包含 26-bit 的 `immediate` 目標位址欄位。
+* **目標位址計算 (Target Address)**：
+  `Target = { (PC + 4)[31:28], immediate[25:0], 2'b00 }`
+  將遞增後的 `PC + 4` 最高 4 位元、26-bit 立即數與低位補上的 `2'b00`（左移 2 位元）進行串接（Concatenate），組成 32-bit 跳轉目標位址。
+* **執行語意**：無條件將計算出的 `Target` 寫入 PC (`PC <- Target`)。
+
+#### Datapath 與控制訊號
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/6f7b1899-1613-4530-b9de-1fb0f02e7fde" />
+
+* **位址串接**：透過 `concat` 單元結合 `PC + 4` 的高 4 位元與指令擴充後的 28 位元位址。
+* **控制邏輯 (`isJ` / `PCSrc`)**：切換 PC 輸入端的多工器（MUX），使 PC 更新為跳轉目標位址。
+* **不破壞原則 (Do No Harm)**：未參與跳轉的硬體元件需保持停用狀態（`RegWrite = 0`、`MemWrite = 0`、`MemRead = 0`），防止錯誤寫入暫存器或記憶體。
+
+---
+
+### 2. 條件分歧指令 (Conditional Branch: `beq`)
+
+#### 指令格式與語意 (I-Type)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/1898163b-5bb0-4e15-afbc-3b1a89958144" />
+
+* **語法與格式**：`beq $rs, $rt, offset`，屬於 I-Type 指令，Opcode 為 4 (6-bit)，包含 `rs` (5-bit)、`rt` (5-bit) 及 16-bit `offset`。
+* **目標位址計算 (Branch Target)**：
+  `Branch Target = (PC + 4) + (sign_extend(offset) << 2)`
+  將 16-bit 立即數進行符號擴充（Sign-Extend）後左移 2 位元（乘 4），再與 `PC + 4` 相加。
+* **條件判斷與執行語意**：
+  * 若 `GPR[rs] == GPR[rt]`，則 `PC <- Branch Target`
+  * 否則，`PC <- PC + 4`
+* **常見變體**：`beq` (相等)、`bne` (不相等)、`blez` (小於等於 0)、`bgtz` (大於 0)。
+
+#### Datapath 與控制訊號
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c64aa9b1-9706-40d0-b07f-882575e725fd" />
+
+* **相等比較**：讀取 `Read data 1` (`rs`) 與 `Read data 2` (`rt`)，經由 ALU 執行減法運算（`sub`），輸出 `bcond` (Zero) 訊號至分歧控制邏輯判斷兩暫存器是否相等。
+* **目標位址加法器**：使用獨立加法器（`Add Sum`）將 `PC + 4` 與左移 2 位元後的符號擴充立即數相加。
+* **控制訊號**：`RegWrite = 0`（不寫入暫存器），根據 ALU 比較結果與控制訊號組合決定 `PCSrc` 訊號，以切換下一條指令位址。
+---
+### 完整單週期資料路徑 (Single-Cycle Datapath) 整合
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/75589ec4-542d-4e3c-ae40-a0109aa78d53" />
+
+* **整合目標**：將 R-Type（算術/邏輯）、I-Type（`lw` / `sw` / `beq`）與 J-Type（`j`）指令的核心硬體路徑完整整合於單一架構中[cite: 28]。
+* **省略項目**：此完整電路圖中暫未包含 `JAL`、`JR` 與 `JALR` 等暫存器跳轉指令[cite: 28]。
+
+---
+
+#### 1. 控制單元 (Control Unit) 訊號輸出總覽
+
+* **主控制單元 (Control)**：接收 `Instruction [31-26]` (Opcode) 作為輸入，解碼後產生所有控制多工器與讀寫的控制訊號[cite: 28]。
+* **ALU 控制單元 (ALU control)**：接收 `ALUOp` 與 `Instruction [5-0]` (Funct)，輸出最終的 `ALU operation` 控制運算類型[cite: 28]。
+
+#### 2. 核心控制訊號與 MUX 切換邏輯：
+* **`RegDst`**：控制目標暫存器寫入編號 MUX[cite: 28]。
+  * `0`：選擇 `Instruction [20-16]` (`rt`，用於 Load 指令)[cite: 28]。
+  * `1`：選擇 `Instruction [15-11]` (`rd`，用於 R-Type 指令)[cite: 28]。
+* **`ALUSrc`**：控制 ALU 第二個運算元輸入 MUX[cite: 28]。
+  * `0`：選擇暫存器讀出值 `Read data 2`（用於 R-Type 與 `beq`）[cite: 28]。
+  * `1`：選擇擴充後的 32-bit 立即數 `Sign extend`（用於 `lw` 與 `sw` 位址計算）[cite: 28]。
+* **`MemtoReg`**：控制寫回暫存器檔案的資料來源 MUX[cite: 28]。
+  * `0`：選擇 `ALU result`（用於 R-Type 指令）[cite: 28]。
+  * `1`：選擇 Data Memory 讀出的 `Read data`（用於 `lw` 指令）[cite: 28]。
+* **`RegWrite`**：暫存器寫入致能訊號（執行 R-Type 與 `lw` 時為 1，`sw` / `beq` / `j` 時為 0）[cite: 28]。
+* **`MemRead` / `MemWrite`**：記憶體讀取與寫入致能訊號（分別在 `lw` 與 `sw` 指令時設為 1）[cite: 28]。
+
+---
+
+#### 3. 下一條指令位址 (PC) 選擇邏輯
+
+更新 PC 位址需經過兩級多工器 (MUX) 進行判斷：
+
+1. **第一級 MUX (`PCSrc2 = Branch AND bcond`)**[cite: 28]：
+   * **條件判斷**：當控制訊號 `Branch = 1` 且 ALU 減法運算結果滿足條件 (`bcond / Zero = 1`) 時，AND 閘輸出 1[cite: 28]。
+   * **切換結果**：AND 閘輸出 1 時選擇 **Branch Target** (`(PC + 4) + (Sign-extend << 2)`)；否則維持 **`PC + 4`**[cite: 28]。
+2. **第二級 MUX (`PCSrc1 = Jump`)**[cite: 28]：
+   * **切換結果**：當 `Jump = 1` 時，優先選擇 **Jump Address** (`{ (PC+4)[31:28], Instruction[25-0], 2'b00 }`) 作為下一個 PC 位址；當 `Jump = 0` 時，傳遞第一級 MUX 的選擇結果[cite: 28]。
+
+---
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/9248aaf5-8a11-47ea-9bd2-d6450905ccfe" />
+
+### 1. 單週期硬體控制邏輯 (Single-Cycle Hardwired Control)
+
+* **控制邏輯性質**：控制訊號為組合電路（Combinational Function），其輸入直接來自從記憶體讀取的指令 `Inst = MEM[PC]`[cite: 30]。
+* **涵蓋指令範圍**：
+  * 所有 **R-Type** 與 **I-Type** 的 ALU 計算指令[cite: 30]。
+  * 記憶體存取指令：`lw` 與 `sw`[cite: 30]。
+  * 條件分歧指令：`beq`, `bne`, `blez`, `bgtz`[cite: 30]。
+  * **省略指令**：跳轉類指令 `j`, `jr`, `jal`, `jalr`[cite: 30]。
+
+---
+
+### 2. MIPS 三大指令格式與欄位劃分
+
+硬體控制單元主要依據指令前 6 位元的 `opcode`（以及 R-Type 的 `funct` 欄位）進行解碼並輸出控制訊號[cite: 30]：
+
+* **R-Type (Register Type)**[cite: 30]：
+  * **欄位結構**：`opcode` (6 bits, 固定為 `0`) | `rs` (5 bits) | `rt` (5 bits) | `rd` (5 bits) | `shamt` (5 bits) | `funct` (6 bits)[cite: 30]
+  * **用途**：暫存器對暫存器的算術與邏輯運算[cite: 30]。
+* **I-Type (Immediate Type)**[cite: 30]：
+  * **欄位結構**：`opcode` (6 bits) | `rs` (5 bits) | `rt` (5 bits) | `immediate` (16 bits)[cite: 30]
+  * **用途**：立即數算術運算、`lw`/`sw` 記憶體位址計算與條件分歧[cite: 30]。
+* **J-Type (Jump Type)**[cite: 30]：
+  * **欄位結構**：`opcode` (6 bits) | `immediate` (26 bits)[cite: 30]
+  * **用途**：大範圍無條件跳轉[cite: 30]。
+---
+### Single-Cycle Microarchitecture: Analysis
+
+#### 1. 核心觀念
+
+* **CPI = 1**：Single-cycle 架構下，每條指令都固定花費 1 個 cycle 執行完畢（`CPI = 1`）
+* **時脈週期由最慢指令決定**：每條指令實際執行時間不同，但因為所有指令共用同一個 clock cycle，所以 clock cycle time 必須配合**最慢的那條指令**（即使大部分指令根本不需要那麼長時間）
+* **Critical Path = 最慢指令的處理時間**：整個電路設計的關鍵路徑（critical path），就是由執行時間最長的那條指令的資料路徑（datapath）所決定
+
+---
+
+#### 2. 指令處理的六個階段 (Instruction Processing Cycle)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d32e8425-27cd-4fc3-92b8-1a2a31541fff" />
+
+在 single-cycle 架構下，所有六個階段都在**一個machine clock cycle** 內完成：
+
+| # | 階段 | 縮寫 |
+|---|---|---|
+| 1 | Fetch（指令擷取） | IF |
+| 2 | Decode + 暫存器操作數擷取 | ID/RF |
+| 3 | Execute / 計算記憶體位址 | EX/AG |
+| 4 | 記憶體操作數擷取 | MEM |
+| 5 | Store / Writeback 結果 | WB |
+
+> 注意：並非每條指令都會用到全部階段（例如 R-type 不需要 MEM，Jump 不需要 EX/MEM/WB）。
+
+---
+
+#### 3. Example Single-Cycle Datapath 延遲分析
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d71806ee-0457-42e4-b7aa-b84d05174b8a" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a26eaaf9-84e5-4f91-af12-91dd977945d4" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/add81d81-4ab2-42a7-9853-0b0648c2f293" />
+
+**假設各元件延遲：**
+
+* 記憶體單元（讀或寫）：`200 ps`
+* ALU 與加法器：`100 ps`
+* 暫存器檔案（讀或寫）：`50 ps`
+* 其他邏輯或線路延遲：`0 ps`
+
+**各指令實際延遲組成：**
+
+| 指令 | IF (mem) | ID (RF) | EX (ALU) | MEM (mem) | WB (RF) | 總延遲 |
+|---|---|---|---|---|---|---|
+| R-type | 200 | 50 | 100 | — | 50 | `400 ps` |
+| I-type | 200 | 50 | 100 | — | 50 | `400 ps` |
+| LW（Load Word） | 200 | 50 | 100 | 200 | 50 | `600 ps` |
+| SW（Store Word） | 200 | 50 | 100 | 200 | — | `550 ps` |
+| Branch | 200 | 50 | 100 | — | — | `350 ps` |
+| Jump | 200 | — | — | — | — | `200 ps` |
+
+**結論：**
+
+* `LW` 是六種指令中延遲最長者（`600 ps`），因為它需要經過完整的 IF → ID → EX → MEM → WB 五個步驟，且用到最慢的記憶體單元兩次（IF 擷取指令 + MEM 讀資料）
+* 因此在 single-cycle 設計中，**整體 clock cycle time 必須設為 600 ps**，才能讓最慢的 LW 指令正確完成
+* 這也直接說明了 single-cycle 架構的缺點：即使是只需要 200 ps 的 Jump 指令，也必須「陪著」LW 等滿 600 ps 才能進入下一個 cycle，造成大量硬體資源閒置浪費 → 這正是後續 pipeline 設計要優化的方向
+---
+
+### 1. 為什麼 Single-Cycle 架構不夠好
+
+#### 1.1 真實世界的記憶體遠比想像慢
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/bbda0d64-c22c-4776-a00d-4aaa227fcd17" />
+
+* 現實中記憶體不是「魔法」，存取時間可能長達 `150ns`
+* 若把「暫存器對暫存器的 ADD / jump」跟「一次記憶體存取」綁在同一個 clock cycle 裡，會非常不划算
+* 更麻煩的是：某些指令需要**存取記憶體不只一次**（例如 fetch 指令本身 + 讀寫資料）
+
+#### 1.2 Single-Cycle 的三大問題
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/bea44b29-bc18-480a-bd45-e72534c8bd78" />
+
+* **不合理（Contrived）**：所有指令都被迫跟最慢的指令一樣慢
+* **沒效率（Inefficient）**：
+  * 所有指令都跑最慢指令的速度
+  * 硬體必須依照「最壞情況」平行準備好所有可能用到的運算資源
+  * 若某資源在一個指令週期中會被用到兩次以上，就得複製一份（浪費硬體）
+* **不易優化**：無法針對常見指令做優化，因為永遠得優化最壞情況（worst case）
+
+---
+
+### 2. 微架構設計三大原則 (Design Principles)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/02562d48-bbcf-4e73-9b2e-48dea28d7ad3" />
+
+* **Critical path design（關鍵路徑設計）**
+  * 找出並縮短最長的組合邏輯延遲
+  * 若路徑太長，可拆成多個 cycle 執行
+
+* **Bread and butter design（常見情況設計）**
+  * 把時間與資源花在「真正重要、常發生」的情況上
+  * 區分 common case 與 uncommon case
+
+* **Balanced design（平衡設計）**
+  * 讓指令/資料流通過硬體元件時保持平衡
+  * 消除瓶頸：硬體資源要配合實際工作量，而非過度配置
+
+> Single-cycle 架構在這三個原則上表現都不好：critical path 被最慢指令拖累、無法針對 common case 優化、資源分配也不平衡（例如需要三個 adder、兩個記憶體）。
+
+**延伸：系統設計的通用哲學**
+
+* 這些原則不只適用電腦架構，也適用於建築、橋樑、產品設計、安全系統等
+* 引用 Frank Lloyd Wright：「architecture 應該基於原則（principle），而非先例（precedent）」
+* 核心系統設計原則：**Keep it simple**（愛因斯坦：「凡事應盡量簡化，但不能過simplify」）
+
+---
+
+### 3. Multi-Cycle Microarchitecture（多週期微架構）
+
+#### 3.1 核心目標與概念
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/b7e8ca5d-b95e-4a32-91f8-a57a4c1c40cd" />
+
+* **目標**：讓每條指令只花費「它真正需要」的時間，而非全部看齊最慢指令
+* **作法**：
+  * Clock cycle time 與「指令處理時間」脫鉤，各自獨立決定
+  * 每條指令依需求走過不同數量的 clock cycle（多次 state transition）
+  * 不同指令會經過不同的狀態路徑（states）
+
+#### 3.2 理論基礎：AS → AS'
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/32d6e7b0-04d5-4d59-9131-38d73c6f1453" />
+
+* ISA 定義的是一個抽象有限狀態機：`State = programmer-visible state`，`Next-state logic = 指令執行的定義`
+* 從 ISA 角度看，指令執行只有「開始狀態 AS」與「結束狀態 AS'」，中間沒有「中繼狀態」
+* Microarchitecture 則可以選擇：
+  * **Choice 1**（single-cycle）：`AS → AS'`，一個 clock cycle 內完成轉換
+  * **Choice 2**（multi-cycle）：`AS → AS+MS1 → AS+MS2 → AS+MS3 → AS'`，透過多個 clock cycle 逐步轉換，中間可以有「programmer-invisible state（MS）」來加速
+
+
+#### 3.3 Multi-Cycle 的優缺點
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/26b9d609-c340-4326-931e-9f7927f6dc69" />
+
+**優點**
+
+* **Critical path**：可獨立持續縮短關鍵路徑，不受限於任何指令的最壞處理時間
+* **Common case**：可針對「重要、常見」的指令去優化其所需的狀態數
+* **Balanced**：不需要提供超過實際需求的資源
+  * 一個指令若需要重複使用某資源多次，不需要重複建置該資源多份
+  * 可重複利用（reuse）昂貴的硬體元件
+
+**缺點**
+
+* 每個 clock cycle 結束時，都要把中間結果存起來 → 需要額外的微架構暫存器（硬體成本）
+* Register 的 setup/hold time（sequencing overhead）在一條指令中會被重複支付多次
+* **並行性受限（Limited concurrency）**：任何時刻，只有機器的一小部分在真正工作
+
+#### 3.4 LC-3 Multi-Cycle 範例（Review）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/2d780c60-04f6-4e82-9332-fbf18fd3d4ce" />
+
+* LC-3 多週期資料路徑比 single-cycle 多了「額外的暫存器（extra registers）」，用來在跨 cycle 間保存中間結果
+* 控制由一個 **Finite State Machine (FSM)** 負責，逐狀態 (state) 產生控制訊號：
+  * State 1：assert `GatePC`、`LD.MAR`，PCMUX 選擇 `+1`，assert `LD.PC`
+  * State 2：`MDR` 被載入指令內容
+  * State 3：assert `GateMDR`、`LD.IR`
+  * State 4：依 opcode 決定下一個狀態
+  * ...一路到 State 63（例如 JMP 把暫存器值載入 PC）
+  * 完整狀態圖參考 Patt & Patel Appendix C
+
+#### 3.5 效能分析公式（Performance Analysis）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/9fd00286-e299-4444-a853-fe24269bc9f1" />
+
+* 單一指令執行時間：`{CPI} x {clock cycle time}`（CPI = Cycles Per Instruction）
+* 整個程式執行時間：
+  * `Σ 每條指令的 {CPI} x {clock cycle time}`
+  * 或簡化為：`{指令數} x {平均 CPI} x {clock cycle time}`
+
+| 架構 | CPI | Clock cycle time |
+|---|---|---|
+| Single-cycle | `= 1`（固定） | 長（被最慢指令拖累） |
+| Multi-cycle | 每條指令不同（平均 CPI 越小越好） | 短 |
+
+> Multi-cycle 架構多了一個自由度：CPI 與 clock cycle time 可以「各自獨立優化」，這是它比 single-cycle 更有彈性的關鍵。
+
+---
 
 [回目錄](#toc)
 
