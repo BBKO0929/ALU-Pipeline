@@ -51,6 +51,7 @@
 | [9/15](#m09d15) | 影片：Digital Design and Computer Architecture(Spring 2025) L8 |
 | [9/16](#m09d16) | 影片：Digital Design and Computer Architecture(Spring 2025) L9 |
 | [9/19](#m09d19) | 影片：Digital Design and Computer Architecture(Spring 2025) L10 |
+| [9/21](#m09d21) | 影片：Digital Design and Computer Architecture(Spring 2025) L11 |
 
 
 ---
@@ -7550,6 +7551,581 @@ MIPS 的 load/store 指令只有兩種定址模式：
 > Multi-cycle 架構多了一個自由度：CPI 與 clock cycle time 可以「各自獨立優化」，這是它比 single-cycle 更有彈性的關鍵。
 
 ---
+
+[回目錄](#toc)
+
+---
+<a id="m09d19"></a>
+
+## 2026 年 9 月 19 日
+
+## 今日進度：
+### 資料：
+1. [Digital Design and Computer Architecture(Spring 2025)](https://safari.ethz.ch/ddca/spring2025/doku.php?id=start)
+2. [Digital Design and Computer Architecture, David Harris and Sarah Harris](https://www.sciencedirect.com/book/9780123704979/digital-design-and-computer-architecture)
+
+### 影片：
+1. [Digital Design and Computer Architecture(Spring 2025) L11](https://www.youtube.com/watch?v=7EiYH010rf4&list=PL5Q2soXY2Zi9Eo29LMgKVcaydS7V1zZW3&index=14)
+
+
+## 關鍵知識/詞彙：
+### Multi-Cycle Microarchitecture（多週期微架構）
+
+#### 核心目標與概念
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/dfcb5216-dbce-4ab7-858a-6233c5991575" />
+
+
+* **目標**：讓每條指令只花費「它真正需要」的時間，而非全部看齊最慢指令
+* **作法**：
+  * Clock cycle time 與「指令處理時間」脫鉤，各自獨立決定
+  * 每條指令依需求走過不同數量的 clock cycle（多次 state transition）
+  * 不同指令會經過不同的狀態路徑（states）
+
+#### 理論基礎：AS → AS'
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e479c736-864d-41da-b0dc-d14343c94d33" />
+
+
+* ISA 定義的是一個抽象有限狀態機：`State = programmer-visible state`，`Next-state logic = 指令執行的定義`
+* 從 ISA 角度看，指令執行只有「開始狀態 AS」與「結束狀態 AS'」，中間沒有「中繼狀態」
+* Microarchitecture 則可以選擇：
+  * **Choice 1**（single-cycle）：`AS → AS'`，一個 clock cycle 內完成轉換
+  * **Choice 2**（multi-cycle）：`AS → AS+MS1 → AS+MS2 → AS+MS3 → AS'`，透過多個 clock cycle 逐步轉換，中間可以有「programmer-invisible state（MS）」來加速
+
+#### Multi-Cycle 的優缺點
+
+**優點**
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/22fb7d47-0269-4ea1-9f5b-19c5611794c7" />
+
+
+* **Critical path**：可獨立持續縮短關鍵路徑，不受限於任何指令的最壞處理時間
+* **Common case**：可針對「重要、常見」的指令去優化其所需的狀態數
+* **Balanced**：不需要提供超過實際需求的資源
+  * 一個指令若需要重複使用某資源多次，不需要重複建置該資源多份
+  * 可重複利用（reuse）昂貴的硬體元件
+
+**缺點**
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8e1cb30c-1afe-4d96-acc2-12720bee87a3" />
+
+
+* 每個 clock cycle 結束時，都要把中間結果存起來 → 需要額外的微架構暫存器（硬體成本）
+* Register 的 setup/hold time（sequencing overhead）在一條指令中會被重複支付多次
+* **並行性受限（Limited concurrency）**：任何時刻，只有機器的一小部分在真正工作
+
+#### LC-3 Multi-Cycle 範例（Review）
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/31553b76-f5e2-43ad-8b60-b6e6e201326f" />
+
+
+* LC-3 多週期資料路徑比 single-cycle 多了「額外的暫存器（extra registers）」，用來在跨 cycle 間保存中間結果
+* 控制由一個 **Finite State Machine (FSM)** 負責，逐狀態 (state) 產生控制訊號：
+  * State 1：assert `GatePC`、`LD.MAR`，PCMUX 選擇 `+1`，assert `LD.PC`
+  * State 2：`MDR` 被載入指令內容
+  * State 3：assert `GateMDR`、`LD.IR`
+  * State 4：依 opcode 決定下一個狀態
+  * ...一路到 State 63（例如 JMP 把暫存器值載入 PC）
+  * 完整狀態圖參考 Patt & Patel Appendix C
+
+#### 效能分析公式（Performance Analysis）
+
+* 單一指令執行時間：`{CPI} x {clock cycle time}`（CPI = Cycles Per Instruction）
+* 整個程式執行時間：
+  * `Σ 每條指令的 {CPI} x {clock cycle time}`
+  * 或簡化為：`{指令數} x {平均 CPI} x {clock cycle time}`
+
+| 架構 | CPI | Clock cycle time |
+|---|---|---|
+| Single-cycle | `= 1`（固定） | 長（被最慢指令拖累） |
+| Multi-cycle | 每條指令不同（平均 CPI 越小越好） | 短 |
+
+> Multi-cycle 架構多了一個自由度：CPI 與 clock cycle time 可以「各自獨立優化」，這是它比 single-cycle 更有彈性的關鍵。
+
+---
+
+### 動手打造 Multi-Cycle Datapath（以 MIPS 為例）
+
+#### 出發點：以 `lw` 指令拆解流程
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/73eaacb8-e0a9-4fd4-98c9-559d33df0e28" />
+
+
+`lw $t0, 0x20($t1)` 需要依序做：
+
+1. 從記憶體讀取指令
+2. 讀取 `$t1` 的暫存器值
+3. 把立即值（0x20）加上暫存器值，計算出記憶體位址
+4. 讀取該位址的記憶體內容
+5. 把讀到的內容寫回 `$t0`
+
+#### 逐步建構資料路徑（每一步對應一個 clock cycle）
+
+* **Step 1（Fetch）**：所有指令共用；用 `IRWrite` 把記憶體讀出的指令寫入 Instruction Register
+  
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a315a8a2-181f-4a20-85ba-6f3f5e0834ea" />
+
+
+* **Step 2（lw 讀暫存器）**：用 Instruction[25:21] 選 rs，讀出到 A
+  
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/cab94a57-dfb6-4ce4-ab85-f98f0e50872d" />
+
+
+* **Step 3（lw 立即值）**：Instruction[15:0] 經過 Sign Extend 得到 `SignImm`
+  
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/757da14a-3151-49f2-86e3-c2ef1b943f88" />
+
+
+* **Step 4（lw 計算位址）**：ALU 計算 `A + SignImm`，結果存入 `ALUOut`
+  
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/382b505d-87d6-483b-9629-b6a9545d5ded" />
+
+
+* **Step 5（lw 記憶體讀取）**：關鍵優化 —— **用同一個記憶體**，透過 `IorD` 訊號在不同 cycle 分別做「讀指令」與「讀資料」
+  
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/615e4608-8a02-465f-b8ad-c59be5d4da8a" />
+
+
+* **Step 6（lw 寫回暫存器）**：把記憶體讀出的資料寫回 Register File
+  
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/be12060a-cc00-47b1-b195-e4d12212c638" />
+
+
+* **Step 7（PC 遞增）**：關鍵優化 —— **用同一個 ALU**，透過 `ALUSrcA` / `ALUSrcB` 在不同 cycle 分別做「PC+4」與「位址計算」
+  
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e8c7ba61-bf69-487c-ad98-c2221ad44b1a" />
+
+
+
+#### 其他指令共用同一個 datapath
+
+* **sw**：把 rt 的值寫入記憶體（`MemWrite`）
+  
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f8f80b2e-68c9-45d4-b493-62cc4fc30138" />
+
+
+* **R-type**：從 rs、rt 讀值 → ALU 運算 → 結果寫回 **rd**（而非 rt，用 `RegDst` 控制），資料來源是 ALUOut（`MemtoReg` 控制）
+  
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/0d3ac516-3a09-4ad6-877f-085e3fcdc6be" />
+
+
+* **beq**：計算 `Target = (SignImm << 2) + (PC+4)`；用 `Zero` 訊號判斷是否相等，`Branch` / `PCSrc` 決定是否跳轉
+  
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/142f7420-16c0-4f8b-b229-836ff28c5aa3" />
+
+
+#### Multi-Cycle 最終達成的資源精簡
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/08743148-496b-42b2-a7df-9b27d1617c9c" />
+
+
+| 資源 | Single-cycle 需求 | Multi-cycle 優化後 |
+|---|---|---|
+| 記憶體 | 指令記憶體 + 資料記憶體，共 2 個 | 只需 **1 個**（不同 cycle 分時使用） |
+| ALU / adder | ALU + PC adder + Branch adder，共 3 個 | 只需 **1 個 ALU**（分時複用） |
+| Clock cycle time | 被最慢指令（如 lw）拖累 | 可獨立設定，簡單指令可以更快完成 |
+
+---
+
+### Multi-Cycle 控制邏輯（Control Unit / FSM）
+
+#### 控制單元的結構
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/bd2f7258-5197-470b-8ad0-95e9e63898e9" />
+
+
+* **Control Unit** = Main Controller (FSM) ＋ ALU Decoder
+* Main Controller 依 Opcode 產生一整組控制訊號：`MemtoReg`、`RegDst`、`IorD`、`PCSrc`、`ALUSrcB`、`ALUSrcA`、`IRWrite`、`MemWrite`、`PCWrite`、`Branch`、`RegWrite`
+* ALU Decoder 依 `Funct` 產生 `ALUControl`，供 ALU 選擇實際運算（如 ADD、SUB、AND...）
+
+#### 各指令對應的 FSM 狀態（State）路徑
+
+
+| 狀態 | 適用情況 | 這個 state 做的事 |
+|---|---|---|
+| S0: Fetch | 所有指令 | `IorD=0`、`ALUSrcA=0`、`ALUSrcB=01`、`ALUOp=00`、`PCSrc=0`、`IRWrite`、`PCWrite`（PC ← PC+4） |
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/267e916b-44a3-4c15-81b8-54f42f9daead" />
+
+
+| 狀態 | 適用情況 | 這個 state 做的事 |
+|---|---|---|
+| S1: Decode | 所有指令 | 讀暫存器、同時計算分支目標位址（`ALUSrcB=11`） |
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/15c7f2bb-dc35-4272-99d0-1d2599c0320a" />
+
+
+| 狀態 | 適用情況 | 這個 state 做的事 |
+|---|---|---|
+| S2: MemAdr | lw / sw | `ALUSrcA=1`、`ALUSrcB=10`：計算 `base + offset` 記憶體位址 |
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/fee69de9-455c-4506-84d9-fd7fece03f48" />
+
+
+| 狀態 | 適用情況 | 這個 state 做的事 |
+|---|---|---|
+| S3: MemRead | lw | `IorD=1`：讀取記憶體到 MDR |
+| S4: MemWriteback | lw | `RegDst=0`、`MemtoReg=1`、`RegWrite`：把讀到的資料寫回暫存器 |
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/0f059b7e-3e2d-45fc-a1cd-9f89980b2e56" />
+
+
+| 狀態 | 適用情況 | 這個 state 做的事 |
+|---|---|---|
+| S5: MemWrite | sw | `IorD=1`、`MemWrite`：把資料寫入記憶體 |
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/472e84f1-8a73-4853-9b53-da1641a5cdbc" />
+
+
+| 狀態 | 適用情況 | 這個 state 做的事 |
+|---|---|---|
+| S6: Execute | R-type | `ALUSrcA=1`、`ALUSrcB=00`、`ALUOp=10`：執行 ALU 運算 |
+| S7: ALU Writeback | R-type | `RegDst=1`、`MemtoReg=0`、`RegWrite`：把結果寫回 rd |
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/9dcd5a3a-30de-46bd-8a57-9a81e2604bc8" />
+
+
+| 狀態 | 適用情況 | 這個 state 做的事 |
+|---|---|---|
+| S8: Branch | beq | `ALUSrcA=1`、`ALUSrcB=00`、`ALUOp=01`、`PCSrc=1`、`Branch`：條件跳轉 |
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/baacb159-9a59-49ac-8e6d-8fdfcbe02557" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/9db096bc-5977-4b30-ba04-50e3feae0812" />
+
+
+| 狀態 | 適用情況 | 這個 state 做的事 |
+|---|---|---|
+| S9 / S10: ADDI Execute / Writeback | addi | 類似 R-type，但 `RegDst=0`（寫回 rt，不是 rd） |
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/b971307e-cc30-4186-ad3b-62643a128cda" />
+
+
+
+| 狀態 | 適用情況 | 這個 state 做的事 |
+|---|---|---|
+| S11: Jump | j | `PCSrc=10`、`PCWrite`：無條件跳轉 |
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/dcdada2a-70b9-444f-99ef-06a377dcd24b" />
+
+
+> 重點觀察：**S0（Fetch）與 S1（Decode）是所有指令共用的**，之後才依 opcode 分岔到不同的狀態路徑；不同指令用的 cycle 數不同（例如 jump 只需 2 個 state，lw 需要 5 個）。
+
+#### 若記憶體存取超過一個 cycle 怎麼辦？
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/fcd3ec96-1eb8-41e1-a322-2c5e921cba2d" />
+
+
+* 停在同一個「memory access」state，直到記憶體回傳資料為止
+* 需要一個「Memory Ready？」訊號作為 control logic 的輸入，決定是否可以進入下一個 state
+
+---
+
+### 微程式控制 (Microprogrammed Control) — 以 LC-3b 為例
+
+#### 起源
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/00960f6e-f517-493c-a938-a83612ef0b54" />
+
+
+* Maurice Wilkes, *"The Best Way to Design an Automatic Calculating Machine"*, 1951
+* 提出微程式化 (microcoded / microprogrammed) 機器的概念，是一種優雅（elegant）的多週期實作方式
+
+#### 關鍵術語
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/2ff0b8f1-5d1d-45db-acbe-d809f300cb11" />
+
+
+| 術語 | 定義 |
+|---|---|
+| **Microinstruction（微指令）** | 對應某一個 state 的一整組控制訊號 |
+| **Microsequencing（微定序）** | 決定下一個 state（及其對應微指令）的過程 |
+| **Control store（控制儲存器）** | 儲存所有可能 state 的微指令的特殊記憶體 |
+| **Microsequencer（微定序器）** | 決定下一個 clock cycle 要用哪一組控制訊號（即下一個 state） |
+
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8d170529-5244-48dc-8f17-8736eb44e7d5" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/ddaa076e-0a5f-4f72-a9e3-4594196fbb4e" />
+
+
+* LC-3b 範例：Control store 大小為 `2^6 x 35`，代表 64 個狀態，每個微指令 35 位元（其中 9 位元用於決定下一狀態的邏輯 `J, COND, IRD`，26 位元是實際控制訊號）
+* Control store 用「狀態編號」作為位址，查表取得對應的微指令
+
+#### 一個 clock cycle 內同時發生兩件事
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8f0d2906-2840-4a79-b3e0-e682f24116ed" />
+
+
+1. 目前的微指令控制 datapath 進行資料處理
+2. 目前的微指令同時決定「下一個 cycle 的微指令」
+
+> Datapath 與 Microsequencer 是**並行運作**的。若改成「當下 cycle 才計算當下 cycle 的控制訊號」，會拉長 clock cycle time，所以才需要這種「提前決定下一狀態」的設計。
+
+#### 微程式化控制的優點
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/cb43d63a-d911-4d69-8630-4ae75584f6cf" />
+
+
+* **強大的抽象能力**：設計者只需要提供微指令序列，就能實作任意複雜的操作，不必更動硬體
+* **易於擴充指令集**：
+  * 新增指令只需修改 microcode
+  * 複雜指令（如 x86 的 `REP MOVS`、多維陣列更新）可拆成一連串簡單的微指令
+* **可事後更新機器行為**：
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/194ff21e-db08-4d7f-ad0a-b7ebfbcb78b7" />
+
+
+  * 出貨後仍可修補（patch）有問題的指令實作
+  * 歷史案例：IBM 370 Model 145（microcode 存於主記憶體，重開機可更新）、IBM System z、Burroughs B1700（甚至可在運作中更新 microcode）
+  * 現代處理器仍常用 microcode patch 來修復硬體臭蟲（bug）
+
+#### Semantic Gap 的轉換概念
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4911f126-c830-4658-bc94-9c38678d9c90" />
+
+
+* 高階語言 (HLL) 與硬體之間存在「語意落差 (semantic gap)」
+* 可以透過**硬體轉譯器（Microsequencer）**，把「複雜指令、複雜定址模式」的 ISA，轉譯成「簡單指令」的 implementation ISA
+* Microinstruction 可視為一種「使用者不可見的 ISA (u-ISA)」
+
+---
+
+### 邁向 Pipelining 的前導：Multi-Cycle 的極限
+
+#### Multi-Cycle 仍然存在的限制
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/47a65921-0cf8-451f-85dd-dbce3f9380e3" />
+
+
+* **並行性依然有限（Limited concurrency）**
+  * 指令處理的不同階段中，某些硬體資源是閒置的
+  * 例如：指令在被 decode 或 execute 時，「Fetch」邏輯是閒置的
+  * 例如：發生記憶體存取時，資料路徑的大部分是閒置的
+
+#### 下一步構想：利用閒置硬體提升平行度
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/edec062f-bb43-460a-9466-3a467b4c5aae" />
+
+
+* **目標**：提升平行度 → 提升指令輸出量（throughput），也就是單位時間內完成更多「工作」
+* **核心想法**：當一條指令正在使用某些資源時，讓其他指令去使用目前閒置的資源
+  * 當某指令在被 decode 時 → 同時 fetch 下一條指令
+  * 當某指令在被 execute 時 → 同時 decode 下一條指令
+  * 當某指令在存取記憶體（ld/st）時 → 同時 execute 下一條指令
+  * 當某指令在把結果寫回暫存器時 → 同時讓下一條指令存取記憶體
+
+> 這正是**Pipelining（管線化）**的核心概念：讓不同指令同時處於指令處理循環的不同階段（IF / ID / EX / MEM / WB），而不是像 multi-cycle 一樣一次只處理一條指令。投影片最後也提醒：實際實作管線化時，需要比這個簡化說明更謹慎地處理（例如資料相依、資源衝突等問題）。
+---
+### Pipelining 基本概念
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/2c7657fc-d20c-4d9b-8741-ce138c2c1a03" />
+
+
+* **系統性定義**：把指令處理循環切成幾個獨立的「stage（階段）」，確保每個 stage 都有足夠的硬體資源可以獨立處理一條指令；每個 stage 同時處理不同的指令（依照程式順序，相鄰指令進到相鄰的 stage）
+* **好處**：提升指令處理的 throughput（吞吐量，即 `1/CPI`）
+* **代價**：需要開始思考一些新問題（後面幾講會講：資料相依、控制相依等）
+
+#### 直覺範例：4 個獨立的 ADD 指令
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/12555796-9988-45bf-9753-ded797e8a179" />
+
+
+* **Multi-cycle（4 stage：F/D/E/W）**：每條指令都要跑完 4 個 cycle 才能開始下一條 → 每 4 cycle 完成 1 條指令
+* **Pipelined（穩態 steady state）**：4 條指令幾乎重疊執行 → 穩態下每 1 個 cycle 就能完成 1 條指令
+* 但緊接著的提問是：「人生真的有這麼美好嗎？」（後面課程會處理各種 pipeline hazard）
+
+#### 洗衣店比喻（The Laundry Analogy）
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/6f0f40dd-62bf-4cd5-bf56-1c23e52facaf" />
+
+
+* 一次洗衣流程：洗衣機 → 烘衣機 → 摺衣服 → 收好，四個步驟依序相依，但**不同批衣物之間彼此互不相依**，且不同步驟不會搶用同一資源
+* **不管線化**：一次只能處理一批，每批全部流程跑完才能開始下一批（例如每 120 分鐘 1 批）
+* **管線化**：多批衣物同時處於流程的不同階段 → 穩態下吞吐量提升為原本的 4 倍（例如變成每 30 分鐘 1 批），且延遲（單批完成所需時間）不變，也沒有增加額外資源
+* **實際情況（有瓶頸時）**：若某一步驟特別慢（例如烘衣機要 150 分鐘），**最慢的那個步驟會決定整體 throughput**（例如變成每 150 分鐘才能出 1 批）
+* **解法**：把慢的那個資源複製一份（例如用 2 台烘衣機），就能把 throughput 恢復到接近理想值（例如每 30 分鐘 1 批）
+---
+
+### 理想管線化 (Ideal Pipeline) 的三個條件
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/87f242cb-f77d-4190-bd2f-b595660ae594" />
+
+
+1. **重複相同的操作**：同一套操作重複套用在大量不同輸入上（如所有衣物都走一樣的流程）
+2. **操作之間彼此獨立**：重複的操作之間沒有相依性
+3. **可均勻切分的子操作**：處理過程可以被平均切成延遲相同、且不共用資源的子步驟
+
+> 汽車生產線、洗衣都很符合這些條件，那「指令處理循環」符不符合呢？——這正是後面要探討的問題（答案：大致符合，但要小心處理例外情況）。
+
+#### 理想管線化的吞吐量公式
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/fb7df87a-5fbb-461e-99d6-2b21e6d46b49" />
+
+
+* 若原本整個組合邏輯處理時間為 `T`：不切分時 `Tput ≈ 1/T`
+* 切成 2 段（各 T/2）：`Tput ≈ 2/T`
+* 切成 3 段（各 T/3）：`Tput ≈ 3/T`
+* 也就是說：**切成 k 段，理論上 throughput 可以提升到 k 倍**
+
+#### 更真實的模型：多了 Register 延遲與成本
+
+**Throughput（考慮 pipeline register 延遲 S）**
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7393120a-779d-490c-9a54-b2635fafbcd3" />
+
+
+* 不管線化：`Tput = 1 / (T + S)`（`S` = register/sequential logic 的延遲）
+* 管線化成 k 段：`Tput(k-stage) = 1 / (T/k + S)`
+* 極限情況（每段只剩 1 個 gate delay）：`Tput(max) = 1 / (1 gate delay + S)`
+* **重點**：Register 延遲會降低理論上的提升幅度（這是 stage 之間的 sequencing overhead），所以切越多段不代表 throughput 可以無限往上衝
+
+**Cost（考慮 register 硬體成本 R）**
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/19c52415-a3c4-4d42-950f-b73b528331a0" />
+
+
+* 不管線化：`Cost = G + R`（`G` = 組合邏輯的 gate 數量，`R` = register 成本）
+* 管線化成 k 段：`Cost(k-stage) = G + R x k`
+* **重點**：切越多段，需要越多組 pipeline register，硬體成本會上升（且此模型還沒算進「資源可能需要複製」的成本）
+
+---
+
+### 把 Pipelining 套用到指令處理循環
+
+#### 把 Single-Cycle 資料路徑切成 5 個 Stage
+
+沿用之前 single-cycle 的 datapath，切分成經典的 **5 級 pipeline**：
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/afe9e8aa-6645-4c07-9a8c-0a8d2f9dde74" />
+
+
+| Stage | 全名 | 假設延遲 |
+|---|---|---|
+| IF | Instruction Fetch（指令擷取） | 200 ps |
+| ID | Instruction Decode / Register file read（解碼與讀暫存器） | 100 ps |
+| EX | Execute / Address calculation（執行/位址計算） | 200 ps |
+| MEM | Memory access（記憶體存取） | 200 ps |
+| WB | Write back（寫回） | 100 ps |
+
+> 投影片特別提問：這樣切分正確嗎？為什麼是 5 個 stage 而不是 4 個或 6 個？邊界為什麼切在這裡？——這提示切分方式並非唯一答案，而是取決於實際延遲與硬體平衡。
+
+#### Pipeline 吞吐量範例：lw 指令連續執行
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d9613525-bb4e-47e9-992e-734c611ece19" />
+
+
+* 若把 5 個 stage 硬湊成同一個 clock cycle 長度（取最長的 stage，即 `200 ps` × 5 段概念），非管線化版本大約每 `800 ps` 才能完成一條指令（等於：每條指令都跑完整個 single-cycle 週期才能開始下一條）
+* 管線化後，clock cycle 只需配合「最長的 stage」即可，多條 `lw` 指令重疊執行，理論上可以做到 **每 200 ps 完成一條指令**
+* **但實際的 5-stage speedup 只有 4 倍，不是預期的 5 倍**
+  * 原因：`ID/RF` 與 `WB` 這兩個 stage 實際延遲只有 `100 ps`，比 clock cycle（`200 ps`）短，等於有**半個 clock cycle 被浪費掉**（因為所有 stage 必須共用同一個、以最長 stage 為準的 clock cycle 長度）
+
+#### Pipeline Register（管線暫存器）
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/1929586f-aa27-400e-9358-1e6931db4d7e" />
+
+
+* 在每個 stage 之間插入暫存器：`IF/ID`、`ID/EX`、`EX/MEM`、`MEM/WB`
+* 這些暫存器負責把上一個 stage 算出的中間結果，保存下來傳給下一個 stage
+* **關鍵前提**：沒有任何一個硬體資源會同時被超過一個 stage 使用（否則多條指令重疊執行時會互搶資源，出錯）
+
+#### 管線運作示意（Illustrating Pipeline Operation）
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c296dac0-3d20-424a-aa1b-eee1ca722e36" />
+
+
+**Operation View（以時間軸/指令為主軸）**
+
+```
+      t0   t1   t2   t3   t4   t5
+Inst0 IF   ID   EX   MEM  WB
+Inst1      IF   ID   EX   MEM  WB
+Inst2           IF   ID   EX   MEM  WB
+Inst3                IF   ID   EX   MEM  WB
+Inst4                     IF   ID   EX   MEM ...
+```
+
+* 隨著時間推進，越來越多條指令同時「掛」在管線的不同 stage 上，直到進入 **steady state（穩態，管線滿載）**
+
+**Resource View（以硬體資源為主軸）**
+
+* 換個角度看：固定看 `IF` 這個硬體資源，會發現它在 t0 處理 `I0`，t1 處理 `I1`，t2 處理 `I2`……一路持續不間斷地處理新進來的指令
+* 同理，`ID`、`EX`、`MEM`、`WB` 各自的硬體資源也都在穩態下被連續不斷使用，而不是像 multi-cycle 一樣大部分時間閒置
+
+#### 管線化的 Pipelined Operation 實例（lw / sub）
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f2a4b85b-381c-4735-a65d-e77d30142420" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/83ff83e2-ef8c-4343-bcde-618de4b3ec9c" />
+
+
+* 用 `lw $10, 20($1)` 接著 `sub $11, $2, $3` 為例，展示兩條指令如何在時間軸上交錯地經過 `IF → ID → EX → MEM → WB` 五個 stage
+* 每個 clock cycle，管線暫存器把該 stage 算好的資料鎖住並往下一個 stage 傳遞
+* 投影片再次提問：「人生真的有這麼美好嗎？」——暗示這種理想情況忽略了指令之間可能存在的相依性問題（留給後續課程處理，例如資料危障 data hazard）
+
+---
+
+### Pipeline 中的控制訊號 (Control Signals)
+
+#### Control Points 與 Single-Cycle 相同
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/2570da5f-0d15-4ce3-b30e-7864b20a72f0" />
+
+
+* Pipeline 版本的資料路徑，其**控制點（control points）跟 single-cycle datapath 完全一樣**
+  * 例如：`RegWrite`、`MemWrite`、`MemRead`、`MemtoReg`、`ALUSrc`、`ALUOp`、`RegDst`、`Branch`、`PCSrc` 等訊號都還在，只是分佈到不同 stage 執行
+
+#### 什麼時候該產生這些控制訊號？
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/27df958b-0764-4f3e-a01c-d3bbfc00b08f" />
+
+
+同一條指令所需要的控制訊號跟 single-cycle 一樣，但**在管線化架構下，這些訊號要在不同的 clock cycle 才會真正被用到**（因為指令會依序流過不同 stage）。有兩種做法：
+
+* **做法一**：跟 single-cycle 一樣，在 Decode 階段一次把所有控制訊號解出來，然後把這些訊號**沿著管線暫存器一路往後傳，直到被對應的 stage 用到為止**
+* **做法二**：只把「必要的指令欄位（instruction word / field）」往後傳，讓每個 stage（或前一個 stage）**各自在當下才做局部解碼**
+
+> 投影片直接拋出問題讓學生思考：「哪一種做法比較好？」——這是課堂上留下的思考題，後續應該會在課程中討論兩種做法的取捨（例如硬體複雜度 vs. 訊號傳遞路徑長度）。
+
+#### Pipelined Control Signals（實作示意）
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/ff48f790-0f44-4239-9991-4bf93cd50c80" />
+
+
+* 從投影片的資料路徑圖可以看出：控制訊號同樣是先由 Control Unit 依 Opcode 解碼產生，接著隨著 `IF/ID → ID/EX → EX/MEM → MEM/WB` 這些管線暫存器，逐級被「搬運」到它們真正要發揮作用的 stage
+  * 例如 `RegWrite`、`MemtoReg` 這種要到最後 WB 階段才用到的訊號，必須一路被暫存器保留、傳遞過 EX 與 MEM 階段，才能在 WB 階段生效
+  * `Branch`、`MemWrite`、`MemRead` 則是在 EX/MEM 階段附近就會用到
+
+---
+### Single-Cycle vs Multi-Cycle vs Pipeline 比較
+
+#### 直覺理解：做漢堡比喻
+
+假設做一個漢堡需要三個步驟：**烤肉 → 夾生菜 → 包裝**。
+
+* **Single-Cycle**：一次只做一顆，而且規定所有步驟必須在「同一個時間單位」內一次做完、一氣呵成。不管是陽春漢堡還是複雜漢堡，都用「最複雜那款」所需的時間去做，所以簡單的漢堡也會被拖慢。
+* **Multi-Cycle**：一次只做一顆，但允許把製作過程拆成好幾個小階段（cycle）。每個階段做完就把半成品「記錄」下來，交給下一階段接手，直到這顆漢堡完全做完才開始下一顆。陽春漢堡步驟少，可以提早做完；複雜漢堡才需要走完全部步驟。
+* **Pipeline**：找多個人分工組成生產線（例如小明烤肉、小華夾菜、小美包裝）。小明烤完第一顆的肉馬上交給小華，同時自己開始烤第二顆的肉——多顆漢堡同時卡在生產線的不同階段上，整體出餐速度大幅提升。
+
+> **核心差異一句話**：Single-cycle 沒有跨 cycle 接力，所以不需要暫存器；Multi-cycle 有跨 cycle 接力，但同一時刻永遠只有一顆漢堡在被處理（無並行）；Pipeline 則是讓多顆漢堡同時處於生產線的不同階段（有並行）。
+
+---
+
+#### 詳細比較表
+
+| 比較項目 | Single-Cycle | Multi-Cycle | Pipeline |
+|---|---|---|---|
+| **一次處理幾條指令** | 1 條，且必須在 1 個 cycle 內完全做完 | 1 條，但拆成多個 cycle（state）依序執行 | 多條同時進行，各自卡在不同 stage |
+| **CPI（每指令週期數）** | 固定 `= 1` | 依指令不同（如 Jump 只需 2 個 state，lw 需要 5 個） | 理想狀態下趨近 `1`（穩態時每 cycle 完成一條指令） |
+| **Clock cycle time** | 長，被**最慢的指令**（如 lw）拖累 | 短，可獨立於指令處理時間設計 | 短，取決於**最長的那個 stage** |
+| **需不需要暫存器記錄中間結果** |  不需要（一次做完，沒有「留到下個 cycle」的半成品） |  需要（micro-architectural register，接住上一 cycle 留下的半成品） |  需要（Pipeline Register：`IF/ID`、`ID/EX`、`EX/MEM`、`MEM/WB`），還要讓不同指令彼此不打架 |
+| **硬體資源需求** | 高：需重複配置資源（如 3 個 adder、2 個記憶體），因所有動作要在同一 cycle 內平行完成 | 低：資源可跨 cycle 重複使用（reuse），例如只需 1 個 ALU、1 個記憶體 | 中：每個 stage 需要獨立資源（不可共用），但不像 single-cycle 那樣重複到極端 |
+| **並行性 (Concurrency)** | 無：同一時刻只有一條指令在被處理，且沒有分階段 | 有限：同一時刻仍只有一條指令在被處理，其餘硬體閒置 | 高：不同指令同時佔用不同 stage，充分利用原本閒置的硬體 |
+| **控制方式** | 純組合邏輯，依 opcode 直接產生所有訊號 | FSM（有限狀態機）依 state 逐步產生控制訊號；可用 microprogrammed control（control store）實作 | 控制點跟 single-cycle 相同，但訊號要跟著指令沿 pipeline register 往後傳，在對應 stage 才生效 |
+| **主要優點** | 設計直觀簡單 | Critical path 可獨立優化、資源利用平衡、常見指令可加速 | Throughput 大幅提升（`1/CPI` 高），硬體利用率最高 |
+| **主要缺點** | Clock cycle 被最慢指令拖累，硬體浪費嚴重 | 每個 cycle 都要付出暫存的額外開銷（sequencing overhead）；並行性仍有限 | 需處理 Hazard（資料相依、控制相依），設計複雜度最高；理論加速比會被 pipeline register 延遲打折 |
+| **速度瓶頸決定者** | 全部指令中**最慢的那一條** | 全部指令中**需要最多 state 的那一條** | Pipeline 中**延遲最長的那個 stage** |
+| **典型範例** | LC-3 / MIPS single-cycle datapath | LC-3 FSM 實作、Wilkes 提出的 microprogrammed machine | 經典 5-stage MIPS pipeline（IF-ID-EX-MEM-WB） |
+
+---
+
+#### 三者的演進邏輯
+
+1. **Single-cycle 的問題**：所有指令都要遷就最慢的那一條，硬體資源也浪費（要重複準備多份）
+2. **Multi-cycle 的解法**：把指令拆成多個 cycle，資源可以重複使用、簡單指令能提早結束——但代價是同一時刻仍然只能處理一條指令，其餘硬體閒置
+3. **Pipeline 的解法**：既然 multi-cycle 大部分硬體都在閒置，那就讓「不同指令」同時佔用「目前閒置的部分」，用重疊執行的方式把 throughput 推向理論極限——但也因此引入了新問題：**Hazard**（資料相依 / 控制相依），這是接下來課程 Issues in Pipelining 要處理的重點。
 
 [回目錄](#toc)
 
