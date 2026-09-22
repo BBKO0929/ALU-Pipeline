@@ -52,6 +52,7 @@
 | [9/16](#m09d16) | 影片：Digital Design and Computer Architecture(Spring 2025) L9 |
 | [9/19](#m09d19) | 影片：Digital Design and Computer Architecture(Spring 2025) L10 |
 | [9/21](#m09d21) | 影片：Digital Design and Computer Architecture(Spring 2025) L11 |
+| [9/22](#m09d22) | 影片：Digital Design and Computer Architecture(Spring 2025) L12 |
 
 
 ---
@@ -8126,6 +8127,565 @@ Inst4                     IF   ID   EX   MEM ...
 1. **Single-cycle 的問題**：所有指令都要遷就最慢的那一條，硬體資源也浪費（要重複準備多份）
 2. **Multi-cycle 的解法**：把指令拆成多個 cycle，資源可以重複使用、簡單指令能提早結束——但代價是同一時刻仍然只能處理一條指令，其餘硬體閒置
 3. **Pipeline 的解法**：既然 multi-cycle 大部分硬體都在閒置，那就讓「不同指令」同時佔用「目前閒置的部分」，用重疊執行的方式把 throughput 推向理論極限——但也因此引入了新問題：**Hazard**（資料相依 / 控制相依），這是接下來課程 Issues in Pipelining 要處理的重點。
+
+[回目錄](#toc)
+
+---
+<a id="m09d22"></a>
+
+## 2026 年 9 月 22 日
+
+## 今日進度：
+### 資料：
+1. [Digital Design and Computer Architecture(Spring 2025)](https://safari.ethz.ch/ddca/spring2025/doku.php?id=start)
+2. [Digital Design and Computer Architecture, David Harris and Sarah Harris](https://www.sciencedirect.com/book/9780123704979/digital-design-and-computer-architecture)
+
+### 影片：
+1. [Digital Design and Computer Architecture(Spring 2025) L12](https://www.youtube.com/watch?v=EkLmDhThlQc&list=PL5Q2soXY2Zi9Eo29LMgKVcaydS7V1zZW3&index=15)
+
+
+## 關鍵知識/詞彙：
+
+### Pipelined Datapath and Control Logic
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/bed8f539-9560-4e20-9858-9be58618c946" />
+
+* **Pipelined Datapath Design**
+  * **Single-Cycle Datapath**: 從單一週期資料路徑 (`Single-Cycle Datapath`) 開始設計。
+  * **Break Down into Stages**: 決定如何將資料路徑劃分為數個階段 (`Stages`)。
+  * **Add Pipeline Registers**: 加入管線暫存器 (`Pipeline Registers`) 用以分隔各個階段。
+  * **Data Signal Propagation**: 將資料訊號傳遞至需要該訊號的階段。
+  * **Correct Stage Action**: 確保在正確的階段執行正確的操作。
+    * **Cross-Stage Wires**: 跨越階段邊界的連線 (`Wires`) 必須謹慎處理。
+
+* **Pipelined Control Logic Design**
+  * **Single-Cycle Control**: 從單一週期的控制訊號與控制邏輯開始設計。
+  * **Control Signal Propagation**: 將各個控制訊號逐步傳遞至需要該訊號的特定階段。
+    * **Extend Pipeline Registers**: 必須擴展管線暫存器 (`Pipeline Registers`) 以一併儲存並傳遞控制訊號。
+
+* Example
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/09656958-2c7a-4b9c-a1ad-7d750753429b" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/eb399889-52eb-4f3a-9274-41239f8870ca" />
+
+---
+### Basic Pipelined Processor
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/6f790b2b-00bd-478a-acf1-0ffff9666848" />
+
+* **Pipeline Structure Overview**
+  * **Five Stages**: 架構包含取指 (`Fetch`), 解碼 (`Decode`), 執行 (`Execute`), 記憶體 (`Memory`), 寫回 (`Writeback`) 五個管線階段。
+  * **Control Signal Pipeline**: 控制單元 (`Control Unit`) 在解碼階段產生控制訊號，並隨指令在管線暫存器間逐級傳遞（標示字尾 `D`, `E`, `M`, `W`）。
+  * **Datapath Separation**: 透過管線暫存器分隔各個階段，確保資料與控制訊號在正確的時間點同步傳送。
+
+* **Key Design Issues**
+  * **Handling Dependent Instructions**: 如何處理前後指令之間存在相依性 (`Dependent Instructions`) 的狀況。
+  * **Multi-Cycle Memory Access**: 如何處理需要多個時脈週期才能完成存取的記憶體 (`Multi-Cycle Memory Access`)。
+
+---
+### Instruction Pipeline: Not An Ideal Pipeline
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/44ba05ee-63df-4813-910b-51c61017ab72" />
+
+* **Identical Operations... NOT!**
+  * **Different Instruction Needs**: 不同的指令並不需要相同的管線階段 (`Pipe Stages`)。
+  * **External Fragmentation**: 強迫不同指令經過相同的階段會導致外部碎片 (`External Fragmentation`)，使得某些階段在處理特定指令時處於閒置狀態。
+
+* **Uniform Suboperations... NOT!**
+  * **Unequal Stage Latency**: 不同的管線階段具有不同的延遲時間 (`Latency`)。
+  * **Internal Fragmentation**: 強迫所有階段由相同的時脈週期 (`Clock Cycle Time`) 控制會產生內部碎片 (`Internal Fragmentation`)，較快的階段仍須消耗完整的週期時間。
+
+* **Independent Operations... NOT!**
+  * **Inter-Instruction Dependencies**: 指令之間並非完全獨立 (`Not Independent`)。
+  * **Pipeline Stalls**: 必須偵測並解決指令之間的相依性以確保結果正確，這會導致管線停頓 (`Pipeline Stalls`)。
+
+---
+### Issues in Pipeline Design
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/5674b45c-c180-4be6-8541-74abbe593a52" />
+
+* **Balancing Work in Pipeline Stages**
+  * **Stage Division**: 決定劃分多少個階段 (`Stages`) 以及每個階段所執行的操作。
+
+* **Maintaining Pipeline Flow**
+  * **Disruption Handling**: 在面對打亂流程的事件時，維持管線正確 (`Correct`)、持續運作 (`Moving`) 與填滿 (`Full`)。
+  * **Handling Dependences**: 處理指令間的資料相依 (`Data`) 與控制相依 (`Control`) 問題。
+  * **Handling Resource Contention**: 處理硬體資源爭用 (`Resource Contention`)。
+  * **Handling Long-Latency Operations**: 處理高延遲或多週期 (`Multi-Cycle`) 運算。
+
+* **Handling Exceptions and Interrupts**
+  * **System Events**: 處理例外 (`Exceptions`) 與中斷 (`Interrupts`) 機制。
+
+* **Advanced Pipeline Optimization**
+  * **Improving Throughput**: 透過最小化管線停頓 (`Minimizing Stalls`) 來提升吞吐量 (`Throughput`)。
+
+---
+### Causes of Pipeline Stalls
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/135c4e51-0270-45d9-9333-0c9b83eaa775" />
+
+* **Definition of Stall**
+  * **Pipeline Stopped**: 停頓 (`Stall`) 是指管線停止繼續運作或推進的狀態 (`A condition when the pipeline stops moving`)。
+
+* **Resource Contention**
+  * **Hardware Conflict**: 多個指令同時爭用相同的硬體資源 (`Resource contention`)。
+
+* **Dependences Between Instructions**
+  * **Data Dependences**: 指令之間的資料相依性 (`Data`)。
+  * **Control Dependences**: 指令之間的控制相依性 (`Control`)。
+
+* **Long-Latency Operations**
+  * **Multi-Cycle Operations**: 高延遲或需要多個週期才能完成的運算操作 (`Long-latency multi-cycle operations`)。
+
+---
+### Dependences and Their Types
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c1520d90-e438-420a-9e2b-6422890f3d17" />
+
+* **Terminology**
+  * **Alternative Names**: 也被稱為相依性 (`dependency`)，或較不理想的稱呼冒險 (`hazard`)。
+
+* **Core Concept**
+  * **Ordering Requirements**: 相依性決定了指令之間的執行順序需求 (`ordering requirements`)。
+
+* **Two Main Types**
+  * **Data Dependence**: 資料相依性 (`Data dependence`)。
+  * **Control Dependence**: 控制相依性 (`Control dependence`)。
+
+* **Resource Contention**
+  * **Resource Dependence**: 資源爭用 (`Resource contention`) 有時也被稱為資源相依性 (`resource dependence`)。
+  * **Program Semantics Difference**: 然而，這並非由程式語意 (`program semantics`) 所本質決定，因此會將其分開處理。
+
+---
+
+### Handling Resource Contention
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c00d4ad8-4cc0-40c8-836f-de63b6173814" />
+
+* **資源爭用發生原因**
+  * **Hardware Conflict**: 當不同管線階段 (`Stages`) 的指令，在同一個時脈週期爭用相同的實體硬體資源時發生。
+
+* **解決方案 1：硬體層級 - 直接消除衝突**
+  * **Resource Duplication**: 透過增加硬體資源數量或提升其吞吐量，徹底解決競爭問題。
+  * **Harvard Architecture**: 分離指令與資料快取 (`I-Cache` / `D-Cache`)，避免取指與記憶體存取階段互相干擾。
+  * **Multi-Porting**: 替記憶體或暫存器加入多個存取埠 (`Multi-port`)，支援同時讀寫。
+
+* **解決方案 2：控制層級 - 偵測衝突並實施停頓**
+  * **Stall Mechanism**: 當硬體資源無法複製時，透過控制邏輯偵測衝突，並強制暫停 (`Stall`) 其中一個階段。
+  * **Priority Policy**: 需決定暫停順序（通常優先讓較早進入管線的舊指令執行，暫停新指令）。
+  * **Single-Port Bottleneck**: 例如暫存器檔案 (`Register File`) 僅有單一讀寫埠時，同時發生讀寫就必須透過停頓來排隊。
+
+* Example
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f01616d2-53dd-47f1-9785-4be018faa0a3" />
+
+---
+### Data Dependences
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/057f4425-0fda-4479-b781-a7ae0fc9e6df" />
+
+* **Data Dependence Types**
+  * **Flow Dependence (RAW)**: 真相依 (`True Data Dependence`)，即先寫後讀 (`Read After Write`)。後續指令必須等待前方指令將資料寫入後才能讀取。
+  * **Anti Dependence (WAR)**: 反相依 (`Anti Dependence`)，即先讀後寫 (`Write After Read`)。後續指令寫入暫存器時，必須等待前方指令讀取完完畢，避免舊資料被覆蓋。
+  * **Output Dependence (WAW)**: 輸出相依 (`Output Dependence`)，即先寫後寫 (`Write After Write`)。兩條指令同時寫入同一個暫存器，必須維持正確的順序以保留最後的寫入結果。
+
+* **Impact on Pipelined Machine**
+  * **Preserving Semantics**: 不論是哪一種相依性，管線處理器都必須保證程式執行的語意正確性 (`Program Semantics`)。
+  * **True Dependence Bottleneck**: `Flow Dependence` 是真正存在資料傳遞關係的相依性，必須嚴格遵守，是造成管線停頓 (`Stalls`) 的主要原因。
+  * **Architectural Register Limit**: `Anti Dependence` 與 `Output Dependence` 屬於假相依 (`False Dependence`)，其產生的根源是硬體的架構暫存器數量有限 (`Limited Architectural Registers`)，導致暫存器名稱被重複使用。
+
+* Example
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/ddb16c3e-1bb6-4250-b28e-3f572e2dd892" />
+
+
+---
+### How to Handle Data Dependencies
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/ff380f1b-179d-46ac-a7c8-95e0bbc5dd79" />
+
+
+* **Anti and Output Dependences Handling**
+  * **Program Order Write-Back**: 反相依 (`WAR`) 與輸出相依 (`WAW`) 較容易處理，只要確保寫入操作僅在管線最後階段 (`Last Stage`) 執行，並嚴格遵循程式順序 (`Program Order`) 即可解決。
+
+* **Six Fundamental Ways to Handle Flow Dependences**
+  * **Stall and Wait**: 偵測到相依性後暫停管線，等待資料寫回暫存器檔案 (`Register File`)。
+  * **Data Forwarding / Bypassing**: 偵測到相依性後，透過前傳機制 (`Forwarding/Bypassing`) 直接將資料送到需要的指令。
+  * **Software Scheduling**: 由編譯器在軟體層級 (`Software Level`) 調整指令順序以消除相依，硬體完全無需偵測。
+  * **Out-of-Order Execution**: 偵測到相依性後將其排開，優先執行其他不相依的獨立指令 (`Independent Instructions`)。
+  * **Speculative Execution**: 預測所需的資料數值並進行投機執行 (`Speculative Execution`)，事後再驗證 (`Verify`) 正確性。
+  * **Fine-Grained Multithreading**: 當遇到相依時直接切換執行其他執行緒的指令 (`Fine-Grained Multithreading`)，硬體同樣無需進行相依性偵測。
+
+---
+### RAW Dependence 與 Pipeline Stall 
+
+#### 1. 先建立背景：什麼是 RAW（Read After Write）Dependence
+
+* **RAW = 資料危障 (Data Hazard) 的一種**：後面的指令要「讀取」某個暫存器，但前面的指令還沒把值「寫入」該暫存器
+* 在 5-stage pipeline（`IF → ID → EX → MEM → WB`）中：
+  * **讀暫存器**發生在 `ID` 階段
+  * **寫回暫存器**發生在 `WB` 階段
+* 如果後面指令的 `ID` 發生在前面指令的 `WB` **之前**，就會讀到「還沒被更新」的舊值 → 這就是 RAW hazard
+
+---
+
+#### 2. RAW Dependence Handling —— 距離多遠才不會衝突？
+<img width="1439" height="1079" alt="image" src="https://github.com/user-attachments/assets/a88501e4-01b4-403c-ace8-510c65a99211" />
+
+
+#### 這張投影片在問什麼
+
+用一連串 `addi` 指令（後面的指令會用到前面指令算出來的暫存器 `ra`）為例，觀察：**當兩條有相依關係的指令之間相隔幾條指令時，才不會在 5-stage pipeline 裡發生衝突？**
+
+#### 圖解重點
+
+* 第 1 條指令：`addi ra, r-, -`（計算出 `ra` 的值，會在自己的 `WB` 階段才真正寫回）
+* 後面接續的 4 條指令，都要讀取 `ra` 這個值：
+  * 與第 1 條**只差 1 條指令**（緊接在後面）
+  * 差 2 條
+  * 差 3 條
+  * 差 4 條
+* 投影片用紅色爆炸符號標出：**只要後面指令的 `ID` 階段發生在第 1 條指令 `WB` 階段完成「之前」，就會撞在一起（衝突）**
+
+#### 為什麼「差 1、2、3 條」都會衝突，但「差得夠遠」就不會？
+
+以 cycle 時間軸來看（第 1 條指令 `WB` 發生在第 5 個 cycle）：
+
+| 相隔幾條指令 | 該指令的 ID 階段落在第幾個 cycle | 此時第 1 條指令的 WB 完成了嗎？ | 結果 |
+|---|---|---|---|
+| 差 1 條 | 第 3 個 cycle | 還沒（要等到第 5 個 cycle） |  衝突 |
+| 差 2 條 | 第 4 個 cycle | 還沒 |  衝突 |
+| 差 3 條 | 第 5 個 cycle | **剛好同時**（若暫存器檔案支援「前半 cycle 寫入、後半 cycle 讀出」，勉強可以不衝突） |  臨界情況 |
+| 差 4 條以上 | 第 6 個 cycle 以後 | 早就寫完了 |  不衝突 |
+
+> **結論**：在沒有任何特殊硬體輔助（如 forwarding）的情況下，只要兩條有相依關係的指令**距離太近（通常是 3 條指令以內）**，就會發生 RAW hazard，必須想辦法處理，否則會讀到錯誤的舊值。
+
+---
+
+#### 3. Pipeline Stall —— 問題設定
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c7367909-0742-4343-a74b-c916e2e69f8c" />
+
+
+#### 情境設定
+
+* 指令 `i`：`rx ← ...`（會寫入 `rx`）
+* 指令 `j`：`... ← rx`（要讀取 `rx`）
+* 一開始 `dist(i, j) = 1`，代表 `j` 是緊接在 `i` **後面的下一條指令**（相隔最近、最容易撞在一起的情況）
+
+#### 圖解重點
+
+* `Insth`、`Insti`、`Instj`、`Instk`、`Instl` 依序進入 pipeline，每條都間隔 1 個 cycle 進入 `IF`
+* 圖上用箭頭標出：**`Instj` 在 `t3` 這個 cycle 需要讀取 `rx`（ID 階段），但 `Insti` 真正把 `rx` 寫回去，是在更晚的 `WB` 階段**——時間點對不上，這就是圖中箭頭要凸顯的落差
+* 圖上用紫色底色特別標出 `t3` 這一欄，代表這正是「危障被偵測到、必須採取行動」的那個關鍵 cycle
+
+---
+
+#### 4. Stall 具體怎麼做——Stop Upstream + Drain Downstream
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/26b6aa92-c77b-49ad-9a99-0da4e92862e4" />
+
+
+**定義**：`Stall = 讓有相依關係的指令（dependent instruction）原地等待，直到它需要的來源資料真正可用為止`。具體做法分成兩步：
+
+1. **Stop all up-stream stages（擋住上游）**：凍結 `Instj` 前面（program order 上排在它後面、但物理上在它「上游」尚未進入 pipeline 較深階段）的指令，讓它們**卡在原本的階段不能前進**
+2. **Drain all down-stream stages（清空下游）**：在 `Instj` 原本該往下走的那些階段（`ALU → MEM → WB`）**插入空的 bubble**，讓下游階段暫時沒有真正的工作可做，等 `Instj` 真正準備好再流過去
+
+#### 圖解對照（這張投影片實際發生的事）
+
+| 指令 | 實際發生的狀況 |
+|---|---|
+| `Insti`（生產者） | 正常跑完 `IF → ID → ALU → MEM → WB`，`WB` 完成的那一刻，`rx` 才真正被寫入 |
+| `Instj`（消費者） | `IF` 正常進行，但 `ID` 被**卡住重複 3 次**（灰底斜線的 `ID` 方塊）——代表這 3 個 cycle 它一直在等，沒有真的完成解碼；直到 `Insti` 的 `WB` 完成後的下一個 cycle，`Instj` 才真正完成 `ID`，箭頭正是從 `Insti` 的 `WB` 指向 `Instj` 真正生效的那個 `ID` |
+| `Instk`、`Instl`（後面的指令） | 因為 `Instj` 卡在 `ID` 動不了，它們也被迫**卡在 `IF` 階段重複等待**（灰底斜線的 `IF` 方塊），不能提早擠進 `ID`——這就是「stop all up-stream stages」的實際樣子 |
+| 紫色區塊（`t3~t5`） | 就是整個 stall 期間：這幾個 cycle 裡，`Instj`、`Instk`、`Instl` 都被凍結原地，直到紫色區塊結束才恢復正常前進 |
+
+#### Bubble 插入後的效果：distance 被「拉長」了
+
+* 原本 `dist(i, j) = 1`（`j` 緊接在 `i` 後面）
+* 中間硬插入了 **3 個 bubble**（`i → bubble → bubble → bubble → j`）
+* 結果等於**強迫把 `j` 往後推到「跟 `i` 相隔 4 條」的位置**才真正執行 `ID`：`dist(i, j) = 4`
+* 這正好呼應第 2 節的結論——只要把距離「硬拉長到安全距離」，`WB` 就一定會在 `ID` 之前完成，衝突自然消失
+
+#### 代價
+
+* 每插入一個 bubble，就浪費一個 cycle 沒有真正做事 → **CPI 會大於 1**
+* 原本理想管線化「每個 cycle 完成一條指令」的效果被打折扣
+* Stall 的機制越簡單（不需要額外的資料傳遞線路），但效能損失也越直接
+
+---
+
+#### 三張投影片串起來看
+
+* **Slide 1**：多近的相依關係會出事？（診斷問題——距離太近就衝突）
+* **Slide 2**：抓出最極端的例子（`dist=1`），指出問題發生的確切 cycle
+* **Slide 3**：具體怎麼解決——用 `stop upstream` + `drain downstream` 兩步驟插入 bubble，把危險的距離「硬拉長」到安全距離，代價是 CPI 上升
+
+---
+### Approaches to Dependence Detection (I) - Scoreboarding（記分板機制）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8aca5a8f-b86f-4313-b1f0-1a105c27b033" />
+
+* **Scoreboarding 運作機制**
+  * **Valid Bit 設定**: 暫存器檔案中的每個暫存器皆配置一個有效位元 (`Valid bit`)。
+  * **寫入狀態標記**: 當指令準備對某個暫存器進行寫入操作時，會將該暫存器的 `Valid bit` 設為無效。
+  * **Decode 階段檢查**: 指令進入解碼階段 (`Decode Stage`) 時，會檢查其所有來源與目的暫存器的 `Valid bit` 狀態：
+    * 若全數為有效，代表沒有相依性，指令可繼續順暢執行。
+    * 若任一為無效，代表存在相依性，指令必須強制停頓 (`Stall`)。
+
+* 循環機制：
+
+  	* 設為無效 (Valid = 0)：當有一筆指令準備要寫入某個暫存器時，系統把該暫存器標記為無效（意思是：「這裡面的舊資料已經過期，新資料還在計算中，後面的指令先別讀！」）。
+
+	* 觸發停頓 (Stall)：後面想要讀取這個暫存器的指令，在解碼階段檢查到是 Valid = 0，就知道資料還沒好，必須停頓等待。
+
+	* 重設為有效 (Valid = 1)：當前面那筆寫入指令順利算完，將新資料正式寫回 (Write-Back) 暫存器的那一瞬間，才會把 Valid bit 改回 1 (有效)。
+
+    * 解除停頓與讀取：後面等待的指令看到變回 Valid = 1，就知道資料已經就緒，這時才能安全地讀取資料並繼續執行。
+
+* **優點 (Advantage)**
+  * **硬體開銷極低**: 架構設計非常簡單，每個暫存器僅需額外 1 個位元 (`1 bit per register`) 的硬體負擔。
+
+* **缺點 (Disadvantage)**
+  * **停頓機制過於保守**: 無法精確區分相依性類型，只要觸發任何種類的相依性都會引發停頓，無法僅針對真正的流程相依 (`Flow dependence`) 做精細化處理。
+
+---
+### Approaches to Dependence Detection (II) - Combinational Logic
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/39bf262f-afd9-4e04-8534-2f18ee11de8f" />
+
+* **組合邏輯偵測機制 (Combinational Dependence Check Logic)**
+  * **即時暫存器比對**: 透過專用的組合邏輯電路，檢查解碼階段 (`Decode stage`) 指令的來源暫存器，是否會被位於後續管線階段 (`Later stages`) 的指令寫入。
+  * **判定與處理**:
+    * **存在相依性**: 若比對吻合，代表存在資料相依，立即觸發停頓 (`Stall`) 暫停該指令或管線。
+    * **無相依性**: 若無吻合，代表不存在流程相依 (`Flow dependence`)，指令可直接繼續執行。
+
+* **優點 (Advantage)**
+  * **避免假相依停頓**: 僅針對真實的流程相依進行檢測，遇到反相依 (`Anti dependence`) 與輸出相依 (`Output dependence`) 時不會誤觸發停頓。
+
+* **缺點 (Disadvantage)**
+  * **電路複雜度高**: 比對線路設計比記分板機制 (`Scoreboard`) 更為複雜。
+  * **擴充能力受限**: 當管線加深或擴展為多發射超純量架構 (`Superscalar execution`) 時，比對邏輯的硬體複雜度會劇增。
+
+---
+### Once You Detect the Dependence in Hardware
+<img width="1024" height="769" alt="image" src="https://github.com/user-attachments/assets/e1e81b40-89e3-4328-9ace-f3e132e1d528" />
+
+* **Key Observation (核心觀察)**
+  * **Timing Misalignment**: 兩條指令之間的相依性，會在資料數值真正計算完成並可用 (`Data Value Available`) 之前就被硬體偵測到。
+
+* **Hardware Handling Options (硬體處理選項)**
+  * **Option 1 (Immediate Stall)**: 一旦偵測到相依性，立即暫停 (`Stall`) 後續受影響的指令。
+  * **Option 2 (Conditional Stall & Forwarding)**: 僅在必要時才停頓，並搭配資料前傳機制 (`Data Forwarding / Bypassing`)，盡可能縮短停頓時間。
+  * **Option 3 (Other Advanced Approaches)**: 其他進階處理策略。
+
+---
+### Data Forwarding / Bypassing
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/0373a4b2-8783-473e-8a07-be2d7fb209fb" />
+
+* **問題與目標 (Problem & Goal)**
+  * **傳統瓶頸**: 消費者指令 (`Consumer instruction`) 必須在解碼階段 (`Decode stage`) 停頓等待，直到生產者指令 (`Producer instruction`) 將數值寫回暫存器檔案 (`Register file`)。
+  * **優化目標**: 避免管線產生不必要的停頓 (`Unnecessary stalls`)。
+
+* **核心觀察與實作概念 (Observation & Idea)**
+  * **關鍵觀察**: 消費者指令所需的資料，可以直接從管線較後的階段 (`Later stage`) 直接供給，不必等待寫回暫存器檔案。
+  * **實作機制**: 增加額外的相依性檢查邏輯 (`Dependence check logic`) 與資料前傳匯流排路徑 (`Data forwarding paths / buses`)，只要生產者算出數值，便立即傳送給消費者。
+
+* **機制效益 (Benefit)**
+  * **減少停頓**: 消費者指令可以在管線中持續推進，直到資料可被供給的時間點才進行銜接，進而大幅減少管線停頓 (`Less stalling`)。
+
+---
+### How to Implement Stalling
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7d690445-b198-43f4-9aa7-19adca3aa2dc" />
+
+* **Stall 核心實作機制**
+  * **鎖定管線暫存器**: 凍結 `PC` 與 `IF/ID` 暫存器的更新 (`disable PC and IF/ID latching`)，確保被停頓的指令維持在原本的管線階段[cite: 10]。
+  * **注入氣泡 (Bubble Insertion)**: 在被停頓階段的下一個階段注入無效指令或空操作 (`invalid instructions / NOPs`)，此類無效操作被稱為氣泡 (`bubbles`)，藉此維持管線推進與執行的正確性[cite: 10]。
+
+---
+### RAW Data Dependence Example & Compile-Time Detection and Elimination
+
+#### 1. RAW Data Dependence Example —— 真實 MIPS 範例
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/796f2c78-c2e9-4720-9b02-c93f3a3b832b" />
+
+用一組實際的 MIPS 指令，驗證「距離多遠才不會讀到錯誤值」的理論：
+
+```
+add $s0, $s2, $s3
+and $t0, $s0, $s1
+or  $t1, $s4, $s0
+sub $t2, $s0, $s5
+```
+
+* `add` 在 **cycle 5 的前半段** 把結果寫入 `$s0`（`WB` 階段的寫入動作，發生在該 cycle 的前半）
+* `and`：在 **cycle 3** 讀取 `$s0`（`ID` 階段）→ 太早了，`add` 根本還沒寫 → **讀到錯誤的值** 
+* `or`：在 **cycle 4** 讀取 `$s0` → 一樣太早 → **讀到錯誤的值** 
+* `sub`：在 **cycle 5 的後半段** 讀取 `$s0` → 剛好卡在 `add` 寫入（前半）**之後**、自己的 `ID`（後半）**之前** → **讀到正確的值** 
+
+> **關鍵結論**：只要暫存器檔案支援「同一個 cycle 內，前半寫、後半讀」，那麼**距離剛好等於 3 條指令**時，靠這個時序小技巧就能拿到正確值，不需要額外插入 bubble；只有距離 1、2 條的 `and` 和 `or` 才真的需要處理（stall 或 forwarding）。
+
+---
+
+#### 2. Compile-Time Detection and Elimination —— 用「軟體」取代「硬體」插 bubble
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/3d3e674c-888d-422b-81a4-313eaa4cb35d" />
+
+前面若用**硬體** stall（`stop upstream` / `drain downstream`）是在執行期間動態插入 bubble；這張投影片介紹另一種思路：**在編譯時期，直接由編譯器把 NOP（空指令）插進指令序列裡**，效果跟硬體 stall 一樣，只是提前在編譯階段就處理好了。
+
+#### 做法
+
+在 `add $s0, $s2, $s3` 和 `and $t0, $s0, $s1` 中間，插入 **2 個 `nop`**：
+
+```
+add $s0, $s2, $s3
+nop
+nop
+and $t0, $s0, $s1
+or  $t1, $s4, $s0
+sub $t2, $s0, $s5
+```
+
+* `nop` 在 pipeline 裡老老實實地走完 `IF → ID → ALU → DM → RF` 每個階段，但**什麼實際運算都不做**（純粹佔位用的無效指令）
+* 插入 2 個 `nop` 之後，`and` 原本會在 cycle 3 讀 `$s0`，現在被往後推遲到跟 `add` 寫入時間對齊，同樣 `or`、`sub` 也跟著一起順延，全部都能拿到正確的值
+
+#### 核心原則
+
+> **Insert enough independent instructions for the required result to be ready by the time it is needed by a dependent one.**
+> 插入「足夠數量、且彼此獨立」的指令，讓相依的來源資料在真正被需要之前就已經準備好。
+
+* 這件事可以在 **compiler（編譯器）層級**完成：由編譯器重新排序（reorder）、重新排程（reschedule），或直接插入 `nop`
+
+#### 跟硬體 Stall 的比較
+
+| 比較項目 | 硬體 Stall | 編譯時期插入 NOP |
+|---|---|---|
+| 由誰負責偵測與插入 bubble | 硬體（pipeline interlock 邏輯） | 編譯器（在產生機器碼時就排好） |
+| 硬體複雜度 | 需要額外的偵測與凍結邏輯 | 硬體不需要做任何事，只要照著執行 |
+| 靈活性 | 執行期間動態反應，較保險 | 若編譯器排程不夠聰明，可能塞入不必要的 nop（浪費更多 cycle） |
+| 效能代價 | 都是 **CPI 上升**（多花 cycle） | 同左 |
+
+---
+### Data Forwarding (Data Bypassing)
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a0db81b1-923b-4814-ab32-e4e40685efd9" />
+
+* **別名與核心概念**
+  * **別稱**: 又稱為資料旁路 (`Data Bypassing`)。
+  * **即時傳遞**: 一旦計算結果出爐 (`Value is available`)，立即將資料前傳給相依指令 (`Dependent instruction`)。
+
+* **與資料流概念的連結 (Dataflow Principles)**
+  * **資料流特性**: 資料一經產生即供給後續指令，且指令會在所有運算元 (`Operands`) 皆就緒時執行。
+  * **架構演進**: 資料前傳機制讓傳統管線處理器更貼近資料流執行原則 (`Dataflow execution principles`)。
+
+---
+### Data Forwarding（資料旁路）筆記
+
+#### 1. Data Forwarding: Locations in Datapath —— 不用等 WB，直接抄近路
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/2d579281-0805-4960-a13c-d9484267a897" />
+
+前面提到的 Stall / 插入 `nop` 都是「傻等」到資料真正寫回暫存器（`WB`）才讓後面指令讀取，但其實資料在更早的階段就已經**算出來、存在硬體的某個暫存位置**了。**Forwarding（旁路）** 的想法就是：直接把這個「已經算好、但還沒正式寫回暫存器」的值，接一條線**直接送給後面需要它的指令**，不用等它走完正式的寫回流程。
+
+用同一組範例指令觀察需要哪些旁路路徑：
+
+```
+add $s0, $s2, $s3
+and $t0, $s0, $s1
+or  $t1, $s4, $s0
+sub $t2, $s0, $s5
+```
+
+投影片指出三條實際需要的旁路路徑：
+
+1. **From latched output of ALU to input of ALU**
+   → `add` 算完的結果會先鎖存在 `ALU/DM` 之間的 pipeline register 裡；`and` 緊接在下一個 cycle 進入 `EX`，剛好可以直接從這個鎖存位置把值接過來當作自己 ALU 的輸入
+2. **From WB to input of ALU**
+   → 如果指令離 `add` 稍微遠一點（例如 `or`），`add` 的結果這時已經跑到 `WB` 階段（或即將寫回），可以直接從 `WB` 那個節點把值接到 `or` 的 ALU 輸入
+3. **From WB to RF (internal in Register File)**
+   → 如果指令離得更遠（例如 `sub`），可以讓 `WB` 寫入暫存器檔案的同時，**在暫存器檔案內部**直接把這個值「內部旁路」給正在讀取的指令，等於是同一個 cycle 內「邊寫邊讀」也能拿到正確值
+
+> 白話理解：資料就像接力棒，本來規定一定要跑到終點（`WB`）才能交棒，但 forwarding 讓你可以在**還沒到終點前的任何一個中繼站**，直接把棒子抄近路遞給下一棒，讓下一棒提早開始跑，不用乾等。
+
+---
+
+#### 2. Data Forwarding: Implementation —— 該從哪裡轉、怎麼決定？
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/0b1b9092-a691-4fc3-b012-7ab83a3bf128" />
+
+### 旁路的來源只有兩個
+
+* 從 **Memory 階段** 轉過來
+* 從 **Writeback 階段** 轉過來
+* （都是**轉給 Execute 階段**當作 ALU 的輸入）
+
+#### 什麼時候該觸發旁路？
+
+> **條件**：如果 Memory 或 Writeback 階段的指令，等一下會寫入某個目的暫存器，而這個目的暫存器**剛好等於**目前 Execute 階段指令所需要的來源暫存器 → 就觸發旁路，把值轉送過去
+
+### 如果 Memory 跟 Writeback 兩邊「同時」都符合條件呢？
+
+* **優先讓 Memory 階段的值旁路過去**
+* 原因：Memory 階段的指令，是**比 Writeback 階段的指令更晚執行、更新（more recently executed）**的指令
+* 換句話說：如果兩邊都有同一個暫存器要寫，代表較舊的那次寫入已經過時了，要用**最新**的那個值才是正確的
+
+---
+
+#### 3. Data Forwarding Is Not Always Possible —— Forwarding 也有失靈的時候
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/881edc78-53ae-4c05-8874-7ff197e7ffd9" />
+
+#### 問題範例
+
+```
+lw  $s0, 40($0)
+and $t0, $s0, $s1
+or  $t1, $s4, $s0
+sub $t2, $s0, $s5
+```
+
+* `lw`（load word）要讀記憶體，它的資料**必須等到 `Memory` 階段結束才真正拿到**（不像 `add` 那樣在 `EX` 階段就算完）
+* 緊接在後面的 `and`，在下一個 cycle 就進入自己的 `EX` 階段，**需要 `$s0` 的值時，`lw` 連 `Memory` 階段都還沒跑完**——圖上標記為 `Trouble!`
+* 也就是說：**`lw` 的結果沒辦法即時旁路給緊接在後面那條指令的 `Execute` 階段**
+
+#### 為什麼不能硬幹「乾脆從 Memory 階段拉一條更早的線」解決？
+
+* 理論上或許可以想辦法把時序卡更緊，但這樣做等於是要求 **`lw` 的資料存取速度要更快、或提前完成**
+* 這會拉長 datapath 中某個環節的組合邏輯路徑，**破壞「Critical Path Design」這個核心設計原則**（還記得之前筆記提過的三大設計原則嗎？）
+* 所以現實中的做法是：**只能容忍這一種特定情況（load 之後緊接著用該值的指令）沒辦法完全靠 forwarding 解決**，仍然需要搭配至少 1 個 cycle 的 stall（這種特定情況通常稱為 *load-use hazard*）
+
+#### 這張投影片的重點結論
+
+*  **Forwarding 通常足以解決大部分的 RAW 資料相依**（不需要每次都 stall）
+*  但**並非萬能**：受限於「pipeline 設計」與「不同指令本身的延遲特性」（例如 `lw` 天生比 `add` 晚才能拿到資料），有些情況下 forwarding 就是做不到，只能靠 stall 補救
+
+---
+### Hardware Needed for Stalling
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f11eeed6-9966-417e-985b-9a8076f1a84f" />
+
+* **硬體支援機制 (Hardware Support for Stalling)**
+  * **致能控制 (`EN`)**: 在 `Fetch` 與 `Decode` 階段的管線暫存器加入致能輸入腳位 (`enable inputs / EN`)。
+  * **同步清除控制 (`CLR`)**: 在 `Execute` 階段的管線暫存器加入同步重設腳位 (`synchronous reset/clear / CLR`)。
+  * **無效標示位元 (`INV Bit`)**: 或為每個管線暫存器關聯一個無效位元 (`INV bit`)，用以標示暫存器內容為無效 (`INValid`) 狀態。
+
+* **`lw` 停頓處理流程 (Handling `lw` Stall)**
+  * **鎖定前段管線暫存器**: 維持 `Decode` 與 `Fetch` 階段管線暫存器的數值不變，同時啟動控制訊號 `StallID` 與 `StallF`。
+  * **清空執行階段並注入氣泡**: 清除 `Execute` 階段暫存器的內容以產生氣泡 (`bubble`)，同時啟動控制訊號 `FlushE`。
+
+---
+### Control Dependence
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/156eebb0-d41a-440a-aec9-740281b84b7d" />
+
+* **核心概念與問題 (Core Concept & Question)**
+  * **取指位址判定**: 下一個週期的取指位址 (`Fetch PC`) 應為下一條指令的記憶體位址。
+  * **隱含控制相依**: 理論上，所有指令在執行順序上皆控制相依 (`Control dependent`) 於前一條指令。
+
+* **非控制流指令處理 (Non-Control-Flow Instructions)**
+  * **順序執行位址**: 若擷取到的指令為非控制流指令 (`Non-control-flow instruction`)，下一個 `Fetch PC` 即為順序中的下一條指令位址 (`Next-sequential instruction`)。
+  * **判定條件**: 只要已知該指令的長度大小 (`Instruction size`)，即可輕鬆計算並決定下一個位址。
+
+* **控制流指令挑戰 (Control-Flow Instructions)**
+  * **下個 PC 決定難題**: 若擷取的指令為控制流指令 (`Control-flow instruction`)，該如何提前精確決定下一個 `Fetch PC`？
+  * **指令型態識別**: 在僅進行取指階段時，硬體該如何即時識別該指令是否屬於控制流指令？
+
+---
+### Branch Prediction
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7b30e31d-389c-4553-8090-d3f355c491aa" />
+
+* **核心概念 (Core Concept)**
+  * **PC 相依性**: 分支預測本質上是資料相依性的一種特例，即對程式計數器 (`dependence on PC`) 的相依。
+
+* **`beq` 分支指令處理 (Handling `beq` Instructions)**
+  * **延遲解析**: 條件分支指令 (`Conditional branch`) 直到管線的第四階段才能解析出結果 (`Resolved`)。
+  * **提前取指**: 在分支結果解析出來前，後續的指令就已經被擷取入管線中。
+  * **簡單預測範例 (`Always Not Taken`)**:
+    * 永遠預測擷取下一條順序指令 (`Next sequential instruction`)。
+    * 此策略稱為「永遠不發生」預測 (`Always not taken prediction`)。
+    * 若最終分支成功發生 (`Taken`)，則需清除 / 無效化 (`Flush / Invalidate`) 錯誤擷取的指令。
+
+* **分支預測錯誤懲罰 (Branch Misprediction Penalty)**
+  * **懲罰定義**: 當分支預測錯誤時，必須從管線中清除 (`Flushed`) 的指令數量。
+  * **優化策略**: 可透過提早解析分支結果來降低懲罰，此方法稱為「早期分支解析」(`Early branch resolution`)。
+
+---
 
 [回目錄](#toc)
 
