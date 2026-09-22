@@ -8318,7 +8318,7 @@ Inst4                     IF   ID   EX   MEM ...
 ---
 
 #### 2. RAW Dependence Handling —— 距離多遠才不會衝突？
-<img width="1439" height="1079" alt="image" src="https://github.com/user-attachments/assets/a88501e4-01b4-403c-ace8-510c65a99211" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a88501e4-01b4-403c-ace8-510c65a99211" />
 
 
 #### 這張投影片在問什麼
@@ -8453,7 +8453,7 @@ Inst4                     IF   ID   EX   MEM ...
 
 ---
 ### Once You Detect the Dependence in Hardware
-<img width="1024" height="769" alt="image" src="https://github.com/user-attachments/assets/e1e81b40-89e3-4328-9ace-f3e132e1d528" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e1e81b40-89e3-4328-9ace-f3e132e1d528" />
 
 * **Key Observation (核心觀察)**
   * **Timing Misalignment**: 兩條指令之間的相依性，會在資料數值真正計算完成並可用 (`Data Value Available`) 之前就被硬體偵測到。
