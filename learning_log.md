@@ -53,6 +53,7 @@
 | [9/19](#m09d19) | 影片：Digital Design and Computer Architecture(Spring 2025) L10 |
 | [9/21](#m09d21) | 影片：Digital Design and Computer Architecture(Spring 2025) L11 |
 | [9/22](#m09d22) | 影片：Digital Design and Computer Architecture(Spring 2025) L12 |
+| [9/23](#m09d23) | 影片：Digital Design and Computer Architecture(Spring 2025) L13 |
 
 
 ---
@@ -8684,6 +8685,420 @@ sub $t2, $s0, $s5
 * **分支預測錯誤懲罰 (Branch Misprediction Penalty)**
   * **懲罰定義**: 當分支預測錯誤時，必須從管線中清除 (`Flushed`) 的指令數量。
   * **優化策略**: 可透過提早解析分支結果來降低懲罰，此方法稱為「早期分支解析」(`Early branch resolution`)。
+
+---
+
+[回目錄](#toc)
+
+---
+<a id="m09d23"></a>
+
+## 2026 年 9 月 23 日
+
+## 今日進度：
+### 資料：
+1. [Digital Design and Computer Architecture(Spring 2025)](https://safari.ethz.ch/ddca/spring2025/doku.php?id=start)
+2. [Digital Design and Computer Architecture, David Harris and Sarah Harris](https://www.sciencedirect.com/book/9780123704979/digital-design-and-computer-architecture)
+
+### 影片：
+1. [Digital Design and Computer Architecture(Spring 2025) L13](https://www.youtube.com/watch?v=ECp41bY0SMg&list=PL5Q2soXY2Zi9Eo29LMgKVcaydS7V1zZW3&index=16)
+
+
+## 關鍵知識/詞彙：
+
+### Multi-Cycle Execute：不同指令的執行時間本來就不一樣
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d4217be6-1b86-4ca6-bec1-ca3e00d4a783" />
+
+* 不是所有指令在 `EXECUTE` 階段都花一樣的時間
+* 想法：讓不同的 functional unit（如 Integer add、Integer mul、FP mul、Load/store）各自有不同的執行週期數，且可以是 pipelined 或 non-pipelined
+* 好處：可以讓後面沒有相依關係的指令，提早在其他 functional unit 開始執行，不用等前面那條長延遲的指令做完
+
+#### 問題來了：順序被打亂
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7e2489a7-e73c-4deb-b99c-9a65cba222f0" />
+
+用一個例子說明：
+
+```
+DIV R4 <- R1, R2      (執行需要很多 cycle)
+ADD R3 <- R1, R2      (執行只需要 1 個 cycle)
+```
+
+* `DIV` 因為需要很多 cycle 才能完成 `EXECUTE`，所以它的 `WRITEBACK` 反而比後面很快執行完的 `ADD` 還要晚
+* 結果：**指令的完成順序（completion order）跟程式原本的順序（program order）不一致**
+* 這違反了 von Neumann 架構「循序語意（sequential semantics）」的基本假設
+* 更嚴重的問題：**如果 `DIV` 執行到一半發生例外（例如除以零）呢？** 這時候後面的 `ADD` 可能都已經寫回結果了，但程式邏輯上 `DIV` 明明排在 `ADD` 前面
+
+---
+
+### 用電車比喻理解 Exception
+
+投影片用蘇黎世街頭電車的一系列照片做比喻：
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/05451e95-d309-400f-984d-6cd6429fa572" />
+
+
+* 紅框標記的電車代表「觸發例外的那條指令」，因故（類比：號誌、行人、車流）延遲了
+
+* 黃框標記的是「因為例外而被延遲的後續指令」——即使它本來動作更快，也必須等前面那個「觸發例外的指令」先被處理完，才能繼續往前
+
+* 最後電車重新排好順序繼續往前開，代表「例外被處理並解決」（Exception Handled & Resolved）
+
+核心概念：**即使硬體實際上是亂序（out-of-order）完成工作，最終呈現給外界（程式）的順序，必須看起來像是照著原本規劃好的順序在走。**
+
+---
+
+### Exceptions 與 Interrupts 的定義
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/85e0024d-49b4-4668-8879-5b4b8548fe6d" />
+
+* **Exception（例外）**：因為程式執行內部的問題而產生的「未預期」變化或中斷
+* **Interrupt（中斷）**：因為外部事件，需要處理器處理而產生的「未預期」變化或中斷
+
+兩者都需要：
+
+1. 停止目前的程式
+2. 儲存 architectural state（架構可見狀態）
+3. 處理該 exception/interrupt，切換到對應的 handler
+4. （若情況允許）處理完後返回原本的程式繼續執行
+
+#### 常見範例
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e28a9e2b-5f3b-4d22-ae66-b0a95867bf67" />
+
+
+| 類型 | 範例 |
+|---|---|
+| Exception | Divide by zero、Overflow、Undefined opcode、General protection（存取保護違規）、Page fault |
+| Interrupt | I/O 裝置需要服務（鍵盤、視訊輸入）、系統計時器到期、電源異常、Machine check |
+
+#### Exceptions 與 Interrupts 的差異
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/ec28bfed-3cc9-4c5b-ad40-eccec2a1bbe5" />
+
+
+| 比較項目 | Exception | Interrupt |
+|---|---|---|
+| 成因 | 來自目前執行中的 thread 內部 | 來自 thread 外部 |
+| 何時處理 | 被偵測到（且確認不是投機執行）的當下就處理 | 找方便的時機處理（除非是高優先權，如電源異常、machine check） |
+| 優先權 | 依 process 而定 | 視情況而定 |
+| 處理情境（context） | process 層級 | system 層級 |
+
+#### Aside：x86-64 ISA Manual 的說法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c87c59c3-2324-44eb-b1aa-7e09cfc77c5d" />
+
+
+Intel 官方手冊描述：中斷或例外發生時，目前執行中的程序會被暫停，處理器改去執行對應的 handler；handler 執行完畢後，處理器會恢復被中斷的程序繼續執行，且這個恢復過程對程式而言應該是「連續、沒有中斷痕跡」的，除非例外已經無法恢復、或中斷直接終止了程式。
+
+---
+
+### 什麼是 Precise Exception（精確例外）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/0fa8b64a-37cc-4be1-ae3d-366928309c3d" />
+
+
+**定義**：當一個 exception 或 interrupt 準備要被處理時，architectural state 應該保持「一致（consistent / precise）」，具體滿足兩個條件：
+
+1. 所有排在它**前面**的指令，都必須已經完全 retire（完整跑完並更新 architectural state）
+2. 沒有任何排在它**後面**的指令被 retire
+
+> **Retire = Commit**：意思是「完成執行，並把結果正式寫入 architectural state」
+
+這樣才能保持「循序指令之間有一條乾淨、清楚的分界線」。
+
+---
+
+### Pipeline 中如何偵測與處理 Exception
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/ba204208-c837-4d50-b58a-5ffcc8cc2386" />
+
+當 pipeline 裡「最舊、準備要 retire」的那條指令被偵測到發生 exception 時，control logic 要做以下事情：
+
+1. 確保 architectural state 是精確的（register file、PC、memory 都對齊到正確狀態）
+2. Flush（清空）pipeline 中所有比它更年輕（更晚進來）的指令
+3. 依照 ISA 規定，儲存 PC 與相關暫存器內容
+4. 把 fetch engine 重新導向到對應的 exception handling routine
+
+---
+
+### 為什麼我們需要 Precise Exception？
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/33e72ee3-d197-4d2f-9277-d169fa9e866b" />
+
+
+* von Neumann 模型的 ISA 語意本來就是這樣規定的（對比 dataflow 模型）
+* 有助於軟體除錯（debugging）
+* 讓 exception 之後可以（相對容易地）恢復（recovery）
+* 讓 process 可以被重新啟動（restartable processes）
+* 支援軟體層級的 trap（例如用軟體實作某些 opcode）
+
+---
+
+### 確保 Precise Exception 的做法：Single-cycle 與 Multi-cycle 架構
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/58e5bc33-930e-4f7a-95c6-212c040983b2" />
+
+
+#### Single-cycle：天生就很簡單
+
+* 「指令的邊界」剛好等於「clock cycle 的邊界」
+* 一條指令保證在 1 個 cycle 內完成，不可能出現違反循序語意的情況
+
+#### Multi-cycle：在 FSM 裡加特殊狀態
+
+* 在控制 FSM 裡額外加入「導向 exception/interrupt handler」的特殊狀態
+* 只在「精確的狀態點」（也就是在 fetch 下一條指令**之前**）才切換去 handler，藉此保證乾淨的分界
+
+#### 具體實作範例（LC-3/MIPS 風格的 multi-cycle datapath）
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4ce4c9ec-e887-415d-8698-0ab99bddc574" />
+
+
+* **EPC register（Exception PC）**：存放「觸發例外的那條指令」的 PC
+* **Cause register**：存放例外發生的原因
+* **Exception Handler** 統一從固定位址 `0x80000180` 開始執行
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/99a4b2b5-ed5f-4b7a-b22e-f6539b0a3699" />
+
+
+* 支援的例外類型：`Overflow`（溢位）與 `Undefined instruction`（未定義指令）
+* 特殊指令 `mfc0`：用來把 Cause register 裡記錄的例外原因，複製到一個一般用途的暫存器裡，讓軟體 handler 可以進一步判斷該怎麼處理
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a575af3f-c143-4909-8be9-301236e713ee" />
+
+
+* FSM 裡新增的狀態：`S12（Undefined）`、`S13（Overflow，在 ALU Writeback 途中偵測到溢位就跳過去）`、`S14（MFC0）`
+* Handler 的完整流程：跳到 handler → 把暫存器存到 stack → 用 `mfc0` 讀 cause 決定怎麼處理 → 處理完後把暫存器從 stack 還原 → 用 `mfc0` 把 `EPC` 複製到 `$k0` → 用 `jr $k0` 跳回去繼續執行
+
+---
+
+### Pipeline 架構下的複雜化：Multi-Cycle Execute 讓問題更嚴重
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/aacffd5d-5c7b-4f73-8ef9-b904e2e580be" />
+
+
+跟第 2 節一樣的 `DIV` / `ADD` 例子，但這次放在真正的 pipeline 情境下看：
+
+* 因為不同 functional unit 執行時間不同，指令的 `WRITEBACK`（也就是 retire）順序會亂掉
+* 如果 `DIV` 中途發生例外，但排在它後面、原本應該晚一點才 retire 的 `ADD` 卻已經先 retire 完了 —— 這就直接違反 Precise Exception 的兩個條件
+
+---
+
+### 一個直覺但代價很高的解法：讓所有指令都花一樣的時間
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/3705166e-84a6-4ece-9f4c-b2c548162faf" />
+
+
+* **想法**：不管是哪種指令，統一都用「最慢那個 functional unit」所需要的 cycle 數
+* **缺點**：
+  * 最壞情況的指令延遲，會決定所有指令的延遲（回到 single-cycle 架構同樣的老問題）
+  * 記憶體操作（load/store）延遲通常變化很大，也很難簡單套用這個做法
+* 結論：這個做法太浪費效能，需要更聰明的解法
+
+---
+
+### 真正的解法方向：允許亂序完成，但要能「假裝」還是循序的
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7cf5937e-1338-4dc1-9680-3e486efe2d30" />
+
+**核心問題**：當指令可以不照程式順序完成（out-of-order completion）時，要怎麼確保 exception 仍然是 precise 的？
+
+課程提到四種解法，但**只詳細講解第一種（Reorder Buffer）**，其餘三種明確說明「這堂課不會涵蓋細節」，有興趣可以自己看補充投影片和影片：
+
+1. **Reorder Buffer（ROB）** —— 本堂課重點
+2. History Buffer（不深入講）
+3. Future Register File（不深入講）
+4. Checkpointing（不深入講）
+
+> 參考文獻：Smith and Plezskun, *Implementing Precise Interrupts in Pipelined Processors*, IEEE Trans on Computers 1988 / ISCA 1985。
+
+---
+
+### Reorder Buffer（ROB）詳解
+
+#### 核心想法
+
+**讓指令可以亂序完成（out-of-order），但在真正把結果寫回 architectural state 之前，先重新排回程式順序（reorder）。**
+
+#### 運作流程
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/6e30a717-f5e1-4b25-924f-07f54d31bb27" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4302646d-62cf-424c-a731-6ac53bf22681" />
+
+
+* 指令在 **Decode** 階段時，會在 ROB 裡預先保留「下一個循序位置」的一個 entry（依照程式順序分配）
+* 指令執行完成時，把運算結果先寫進**自己的 ROB entry**（而不是直接寫進 register file）
+* 只有當一條指令**是 ROB 裡最舊的（oldest）**、而且**沒有發生 exception**，它的結果才會被搬到真正的 register file 或 memory 裡（也就是正式 retire）
+
+> ROB 在硬體上是用**環狀佇列（circular queue）**實作的
+
+#### ROB Entry 裡面有什麼
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a2465d8b-111f-4d60-848d-6ec5d40ccfc6" />
+
+一個 ROB entry 需要包含：
+
+* Valid 位元（這個 entry 是否有效）
+* 目的暫存器 ID（Dest reg ID）
+* 目的暫存器的值（Dest reg value）
+* 是否已經寫入結果（Dest reg written?）
+* 若是 store 指令：Store 位址、Store 資料
+* 該指令的 PC
+* 額外的 valid bits，用來追蹤結果是否已經準備好、指令是否已經執行完成
+* 是否發生 exception 的標記
+
+#### 為什麼需要這些欄位
+
+要能做到三件事：
+
+1. 正確地把亂序完成的指令，重新排回程式順序
+2. 若指令可以順利 retire，把結果正式更新到 architectural state
+3. 若在 retire 之前偵測到 exception/interrupt，能夠精確地處理
+
+#### 如果後面的指令需要用到「還在 ROB 裡、還沒正式寫回」的值怎麼辦？
+
+* **做法一（差）**：直接 stall，等到值真正寫回 register file 才讓後面指令繼續 —— 等於讓整個 pipeline 停下來
+* **做法二（好）**：直接從 ROB 裡把值讀出來，不用等它真正寫回 register file
+
+#### Reorder Buffer 怎麼被存取
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/9c06a7d7-1767-4ad0-92a7-26bfa0a6e476" />
+
+
+一個暫存器的值，實際上可能存在於三個地方之一：
+
+1. Register File（已經正式寫回）
+2. Reorder Buffer（已經算完，但還沒正式 retire）
+3. Bypass / forwarding path（剛算出來，正在轉送的路上）
+
+存取方式的差異：
+
+* **Register File**：是一般的 RAM，用 Register ID 當作「位址（address）」直接索引存取
+* **Reorder Buffer**：是 CAM（Content Addressable Memory，內容定址記憶體），要用 Register ID 去「搜尋」內容裡符合的那個 entry
+
+#### 簡化 ROB 存取：用間接指標（Indirection）取代真正的內容搜尋
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/578fd96d-cb21-41bf-a3d3-66be8022a739" />
+
+
+* 想法：**先查 Register File**，檢查該暫存器是否「valid（有效，已經是最新值）」
+* 如果不是 valid，代表這個暫存器目前有一條「還在執行中的指令」要寫入它——這時 Register File 裡存的不是資料本身，而是**指向 ROB 對應 entry 的一個 tag / 指標**
+* 拿到這個 tag 之後，再去 ROB 查對應 entry，取得真正的值
+* 好處：**ROB 本身就不再需要做內容搜尋（CAM），變成單純用 tag（位址）索引即可**
+---
+
+#### **情境**：想像 Register File 就是一整排寫著名字的**置物櫃**（`R0`、`R1`、`R2`...）。你想要拿 `R3` 的東西，走過去開櫃子看，理論上應該要直接看到東西——但問題是，這個東西可能**還在生產線上、還沒做好放進去**。
+
+#### **沒有這個優化之前的做法（笨方法）**：
+
+- 如果 `R3` 的東西還沒做好，你就跑去 ROB 那一長排「半成品暫存區」，一個一個櫃子翻找：「有沒有哪個半成品，標籤寫的是要給 `R3` 的？」
+- 這就是所謂的 **CAM（內容搜尋）**——你不知道東西在哪一格，只能「用內容去找格子」，很沒效率（想像你要在一整排沒有編號的箱子裡，靠翻找裡面的紙條才知道是哪一箱）
+
+#### **加上間接指標之後的做法（聰明方法）**：
+
+- 你走到 `R3` 的置物櫃前，先看櫃子上有沒有貼一張**「認領單」**
+- 如果沒貼紙條 → 代表東西已經在櫃子裡了，直接拿走，結束
+- 如果貼了一張紙條，上面寫著「請到 ROB 的第 14 號箱去拿」→ 你就直接走到**第 14 號箱**（不用翻找，因為紙條已經明確告訴你箱號了），把東西拿出來
+
+---
+
+#### **對照回技術名詞：**
+
+| 比喻 | 技術名詞 |
+|---|---|
+| 置物櫃上的「認領單」 | Register File 裡存的 **tag**（指向 ROB entry 的指標） |
+| 「請到第 14 號箱」 | ROB 裡對應的那個 **entry 編號** |
+| 翻找一整排沒編號的箱子 | ROB 原本要用 **CAM（內容搜尋）** 才找得到值 |
+| 直接走到第 14 號箱拿 | 現在 ROB 可以直接**用編號當地址索引**，變成普通的 RAM 存取 |
+
+#### **一句話總結**：以前是「拿著東西的內容去 ROB 裡大海撈針」，現在是「Register File 先幫你把『去哪一格拿』這件事寫好紙條貼著，你直接照著紙條走過去拿」——查詢方式從「靠內容找」變成「靠地址找」，自然快很多、硬體也簡單很多。
+--
+
+
+#### 真實案例：Intel Pentium III / Pro 的 ROB
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/3c6efca1-a9ed-46f4-88d0-99ca88c5eab6" />
+
+
+* Pentium III/Pro 用一個叫 **RAT（Register Alias Table，暫存器別名表）** 的結構
+* RAT 指向每個架構暫存器「目前的值究竟放在哪裡」（可能在 ROB，也可能已經退休到 RRF——Retirement Register File）
+
+#### 重要觀念：用 ROB 做暫存器重新命名（Register Renaming）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7c93e2e4-1327-486f-9a2a-34c000392002" />
+
+
+
+* **Output dependence（WAW）** 與 **Anti dependence（WAR）** 其實不是真正的資料相依（true dependence），它們只是因為 ISA 裡「暫存器編號有限」，導致不同、彼此無關的運算結果被迫共用同一個暫存器名稱
+* 解法：把「暫存器 ID」重新命名（rename）成「這次要寫入它的那個 ROB entry ID」
+  * 邏輯上：`Architectural register ID → Physical register ID`（也就是 ROB entry）
+  * 重新命名之後，後續指令是透過 ROB entry ID 來取值，而不是直接綁死那個暫存器編號
+* 效果：**消除了 anti 跟 output dependence**，讓機器感覺上好像擁有遠比實際架構暫存器數量更多的暫存器可用
+
+（複習：三種資料相依類型——`Flow dependence / RAW`、`Anti dependence / WAR`、`Output dependence / WAW`）
+---
+### Register Renaming 為什麼能消除 Anti / Output Dependence
+
+#### 核心觀念
+
+* **Output dependence（WAW）** 與 **Anti dependence（WAR）** 都不是真正的資料相依（true dependence）
+* 它們會發生，純粹是因為 **ISA 裡的暫存器編號數量有限**，導致不同、彼此完全無關的運算結果，被迫共用同一個暫存器名稱（例如都叫 `R3`）
+* 解法：把「暫存器 ID」重新命名（rename）成「這次要寫入它的那個 ROB entry ID」
+  * 邏輯上：`Architectural register ID → Physical register ID`（也就是 ROB entry）
+  * 重新命名之後，後續指令是透過 ROB entry ID 來取值，而不是直接綁死那個暫存器編號
+* 效果：**消除了 anti 跟 output dependence**，讓機器感覺上好像擁有遠比實際架構暫存器數量更多的暫存器可用
+
+> 複習：三種資料相依類型——`Flow dependence / RAW`、`Anti dependence / WAR`、`Output dependence / WAW`
+
+#### 白話解釋：用「飯店房號」比喻
+
+**關鍵重點先講清楚**：差別不在於「要不要指定寫入位址」（本來就一定會指定要寫到哪裡），而在於——**同一個暫存器名字（如 `R3`）被重複使用時，以前大家會搶用「同一個固定位置」，重新命名之後，每一次寫入都會拿到「屬於自己的、全新的位置」，不用跟別人共用。**
+
+#### 沒有重新命名之前
+
+假設飯店只有 32 間房（32 個架構暫存器），房號是固定的。今天不同的旅客（不同時間點的指令）都被分配到「303 號房」（因為 ISA 只有這麼多房號可以用），即使他們彼此完全不認識、互不相干：
+
+* 旅客 A 進 303 號房入住（第一個要寫 `R3` 的指令）
+* 旅客 B 也被分配到 303 號房（後面某個也要寫 `R3` 的指令，跟 A 毫無關係，只是剛好也用到 `R3` 這個名字）
+* 問題：**B 必須等 A 退房、房間打掃完，才能真正入住**——即使 B 跟 A 做的事完全無關，也被迫排隊等同一個房間
+* 這就是 anti / output dependence：是「名字」造成的假相依，不是真正的資料相依
+
+#### 重新命名之後
+
+* 飯店後面其實還有一大堆「臨時房間」（ROB entries）沒被算進正式的 32 間房裡
+* 每次有人要辦理入住，飯店櫃檯（renaming 邏輯）都會說：「你不要真的住進 303 號房，我先安排你去臨時房間 87 號，等你退房手續都辦好、輪到你了，我才把你的行李正式搬進 303 號房」
+* 這樣一來，旅客 A 去臨時房 87 號，旅客 B 去臨時房 92 號——**兩人可以同時入住、同時辦事，完全不用互相等待**
+* 只有到最後「正式搬進 303 號房（retire）」這一步，才需要照順序來（這也是為什麼 retire 一定要 in-order）
+
+---
+
+#### 一句話總結
+
+* **重新命名前**：不同指令只要目的暫存器名字一樣（都叫 `R3`），就會被綁定到「同一個實體位置」，彼此卡住
+* **重新命名後**：每個指令的這一次寫入，都會拿到「屬於它自己、獨一無二」的實體位置（ROB entry），跟其他同名的寫入完全分開，互不干擾
+
+「機器感覺上有更多暫存器可以用」的真正原因是：**實際能同時存在的「儲存位置」數量，從「架構規定的 32 個」暴增到「ROB 裡有幾個 entry 就有幾個」**——因為每次寫入都不再共用固定的 32 個位置，而是各自佔一個臨時位置，自然就不會互相卡到了。
+
+---
+
+
+#### 帶有 ROB 的 In-Order Pipeline 各階段定義
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/dd397c07-e7aa-493f-b22e-f0c9de020072" />
+
+
+* **Decode（D）**：存取 register file / ROB，在 ROB 裡分配一個 entry，檢查指令是否可以開始執行，若可以就 dispatch 出去
+* **Execute（E）**：指令可以**不按照順序完成**（out-of-order）
+* **Completion（R）**：把結果寫進 ROB（尚未正式生效）
+* **Retirement / Commit（W）**：檢查目前最舊的指令是否有 exception；如果沒有，就把結果正式寫進 architectural register file 或 memory；如果有，就 flush 整條 pipeline，並跳到 exception handler
+
+> 整體特性：**Dispatch/Execution 是 out-of-order，但 Retirement 一定是 in-order。**
+
+#### Reorder Buffer 的優缺點
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/765144bd-5936-47d1-b5bc-8d161c074c7a" />
+
+
+**優點**
+
+* 概念上對於支援 precise exception 相對單純直覺
+* 可以消除 false dependence（也就是前面提到的 anti / output dependence）
+
+**缺點**
+
+* 需要額外存取 ROB，才能拿到那些「還沒正式寫回 register file」的結果
+* 不管是用 CAM（內容搜尋）還是用 indirection（間接指標），都會增加額外的延遲（latency）與硬體複雜度
+
+---
+
+### 總結
+
+* Pipeline 讓不同延遲的指令有機會亂序完成，但這會破壞 von Neumann 架構原本「循序執行」的語意保證
+* **Precise Exception** 就是要確保：不管硬體內部怎麼亂序執行，對外呈現出來的狀態永遠像是「乾淨地照著程式順序，一條一條做完」
+* Single-cycle 跟 Multi-cycle 架構天生比較容易做到這件事；但在追求高效能的 pipeline（甚至未來會學到的 Out-of-Order Execution）架構下，就需要額外的硬體機制
+* 本堂課詳細講解的解法是 **Reorder Buffer（ROB）**：讓指令亂序完成、但強制依照程式順序 retire，並透過 register renaming 順便解決了 anti / output dependence 的問題
+* 其餘三種解法（History Buffer、Future Register File、Checkpointing）是進階閱讀教材，明天的課程會接著進入 **Out-of-Order Execution**，這些機制屆時可能會再被提到。
 
 ---
 
