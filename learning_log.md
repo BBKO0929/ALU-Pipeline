@@ -54,6 +54,7 @@
 | [9/21](#m09d21) | 影片：Digital Design and Computer Architecture(Spring 2025) L11 |
 | [9/22](#m09d22) | 影片：Digital Design and Computer Architecture(Spring 2025) L12 |
 | [9/23](#m09d23) | 影片：Digital Design and Computer Architecture(Spring 2025) L13 |
+| [9/30](#m09d30) | 資料：複習7/3 - 9/23 內容 |
 
 
 ---
@@ -9101,6 +9102,18 @@ Intel 官方手冊描述：中斷或例外發生時，目前執行中的程序�
 * 其餘三種解法（History Buffer、Future Register File、Checkpointing）是進階閱讀教材，明天的課程會接著進入 **Out-of-Order Execution**，這些機制屆時可能會再被提到。
 
 ---
+
+[回目錄](#toc)
+
+---
+<a id="m09d30"></a>
+
+## 2026 年 9 月 30 日
+
+## 今日進度：
+
+### 資料：複習7/3 - 9/23 內容
+
 
 [回目錄](#toc)
 
