@@ -55,6 +55,7 @@
 | [9/22](#m09d22) | 影片：Digital Design and Computer Architecture(Spring 2025) L12 |
 | [9/23](#m09d23) | 影片：Digital Design and Computer Architecture(Spring 2025) L13 |
 | [9/30](#m09d30) | 資料：複習7/3 - 9/23 內容 |
+| [10/04](#m10d04) | 刷題：複習 HDLBits 7/3 - 9/30 進度|
 
 
 ---
@@ -9113,6 +9114,18 @@ Intel 官方手冊描述：中斷或例外發生時，目前執行中的程序�
 ## 今日進度：
 
 ### 資料：複習7/3 - 9/23 內容
+
+
+[回目錄](#toc)
+
+---
+<a id="m10d04"></a>
+
+## 2026 年 10 月 4 日
+
+## 今日進度：
+
+### 刷題：複習 HDLBits 7/3 - 9/30 進度
 
 
 [回目錄](#toc)
