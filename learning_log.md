@@ -56,6 +56,8 @@
 | [9/23](#m09d23) | 影片：Digital Design and Computer Architecture(Spring 2025) L13 |
 | [9/30](#m09d30) | 資料：複習7/3 - 9/23 內容 |
 | [10/04](#m10d04) | 刷題：複習 HDLBits 7/3 - 9/30 進度|
+| [10/05](#m10d05) | 影片：Digital Design and Computer Architecture(Spring 2025) L14 |
+
 
 
 ---
@@ -9127,6 +9129,384 @@ Intel 官方手冊描述：中斷或例外發生時，目前執行中的程序�
 
 ### 刷題：複習 HDLBits 7/3 - 9/30 進度
 
+
+[回目錄](#toc)
+
+---
+<a id="m10d05"></a>
+
+## 2026 年 10 月 5 日
+
+## 今日進度：
+### 資料：
+1. [Digital Design and Computer Architecture(Spring 2025)](https://safari.ethz.ch/ddca/spring2025/doku.php?id=start)
+2. [Digital Design and Computer Architecture, David Harris and Sarah Harris](https://www.sciencedirect.com/book/9780123704979/digital-design-and-computer-architecture)
+
+### 影片：
+1. [Digital Design and Computer Architecture(Spring 2025) L14](https://www.youtube.com/watch?v=d7PWsgQs7rI&list=PL5Q2soXY2Zi9Eo29LMgKVcaydS7V1zZW3&index=17)
+
+
+## 關鍵知識/詞彙：
+
+### 問題所在：In-order Dispatch 還是會卡住
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/028702d8-7922-4b42-99c6-0e76d87c9595" />
+
+
+即使已經有 ROB 消除了假性相依，**in-order pipeline 仍然要求指令必須按照程式順序被送進 functional unit（這個動作稱為 dispatch）**。
+
+#### 範例：一條「還沒準備好」的指令會卡住整條 pipeline
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/04ab4025-159a-47ef-821a-274fae768f7f" />
+
+
+課程用一個類似上次 exception 的「街景連續照片」比喻：一條長延遲指令卡在 pipeline 前面動不了，即使後面緊接著一條完全獨立、本來可以馬上執行的指令，也因為 in-order dispatch 的規定，**被迫跟著一起卡住，無法提早進入它自己的 functional unit**。直到前面那條長延遲指令終於處理完，後面獨立的指令才終於能夠被 dispatch 執行。
+
+#### 用程式碼具體看這個問題
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4a024579-b8bc-4cd7-8dd1-47fa6499d2ff" />
+
+
+```
+MUL R3, R1, R2        LD  R3, R1(0)
+ADD R3, R3, R1         ADD R3, R3, R1
+ADD R4, R6, R7         ADD R4, R6, R7
+MUL R5, R6, R8         MUL R5, R6, R8
+ADD R7, R9, R9         ADD R7, R9, R9
+```
+
+* 兩段程式碼的共通點：**第一條 `ADD` 會卡住整條 pipeline**，因為它需要的來源暫存器還沒 ready，導致它後面本來彼此獨立的指令全部無法被 dispatch
+* 兩段程式碼的差異：右邊是 `LD`（load），**它的延遲是執行期間才知道的（variable latency，例如 cache miss 與否）**，編譯器在編譯時期根本無法預先得知，所以沒辦法單靠編譯器重新排程來解決
+
+---
+
+### 解法方向：Out-of-order Dispatch
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/ccf7fff0-9ffd-4d8b-8408-5eebda492c87" />
+
+
+* **問題**：in-order dispatch（排程/執行）
+* **解法**：out-of-order dispatch（排程/執行）
+* 其實這個想法源自 **Dataflow（資料流）模型**：只要一條指令的輸入都準備好了，就可以「開火（fire）」執行它，不需要管它在程式裡原本排在哪裡；只是這裡不會把這個概念直接暴露在 ISA 層級，而是用硬體動態達成
+
+#### 順便一提：還有哪些方法可以避免 dispatch stall？
+
+1. 編譯時期的指令排程/重排（Compile-time instruction scheduling）
+2. Value prediction（值預測）
+3. Fine-grained multithreading（細粒度多執行緒切換）
+
+---
+
+### Out-of-order Execution（Dynamic Scheduling）核心想法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8f2a3d1c-b7b2-48be-97b8-0c032f5eba23" />
+
+
+* **想法**：把「還沒準備好」的指令，移到旁邊的「休息區」，不要擋住後面獨立的指令
+  * 這個休息區就叫做 **Reservation Station（保留站）**
+* 在保留站裡，持續監看每條指令所需要的來源「值」是否已經備齊
+* 當一條指令的所有來源值都準備好了，就「開火（fire）」把它 dispatch 出去
+  * **指令是依照 dataflow（資料流）順序被 dispatch，而不是依照 control-flow（控制流／程式）順序**
+* **好處**：**Latency tolerance（延遲容忍度）**——即使某條指令延遲很長，其他獨立指令依然可以提早執行並完成
+
+#### In-order 與 Out-of-order Dispatch 的比較（同一段程式）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/b64623e8-86dd-48de-a6f1-7cd083cffcc4" />
+
+
+課程用一組含 `IMUL`、`ADD` 的範例比較兩種 dispatch 方式所需要的總 cycle 數：
+
+* **In-order dispatch + precise exceptions**：需要 **16 cycles**
+* **Out-of-order dispatch + precise exceptions**：只需要 **12 cycles**
+
+> 關鍵差異：in-order 版本中，一旦某條指令要「STALL」等待來源值，後面所有指令都要跟著卡住；out-of-order 版本中，指令只是在保留站裡「WAIT」，不會擋住其他已經 ready 的指令先執行。
+
+---
+
+### 要實現 Out-of-Order Execution，硬體需要做到四件事
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f1cf3d07-f858-4c13-9c0f-05d457dc22e2" />
+
+
+#### 1. **把「消費者」跟「生產者」串連起來**
+   * 做法：Register Renaming——幫每個資料值綁上一個獨一無二的「tag（標籤）」
+     
+#### 2. **把指令緩衝起來，直到它真正準備好執行**
+   * 做法：Renaming 完成之後，把指令放進 Reservation Station
+     
+#### 3. **讓每條指令自己追蹤來源值是否已經備齊**
+   * 做法：當某個值真正被算出來時，把它的 tag 廣播出去（broadcast）；每條在等待中的指令會拿自己記住的 source tag 跟廣播出來的 tag 比對，比對成功就代表這個來源值變成 ready 了
+     
+#### 4. **當一條指令所有來源值都 ready 時，把它 dispatch 到對應的 functional unit**
+   * 這條指令會「甦醒（wake up）」；如果同時有多條指令都甦醒、但功能單元只有一個，就需要「select（選擇）」機制挑一條先執行
+
+---
+
+### Tomasulo's Algorithm
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e585ce87-b4e5-469d-a7ec-e52eb6e59120" />
+
+
+* 這套支援暫存器重新命名的 Out-of-Order 演算法，由 **Robert Tomasulo** 發明，原本用在 **IBM 360/91** 的浮點運算單元（FPU）上
+  * 參考文獻：Tomasulo, *An Efficient Algorithm for Exploiting Multiple Arithmetic Units*, IBM Journal of R&D, 1967
+* **跟原始版本最大的差異**：現代處理器還額外要求支援 **Precise Exceptions**（原始 Tomasulo's Algorithm 本身並沒有考慮這件事）
+  * 這部分的延伸由 HPS（Patt, Hwu, Shebanow 等人）在 1985 年提出
+* 目前絕大多數高效能處理器都採用 Out-of-Order 的變形，例如：Intel Pentium Pro、AMD K5、Alpha 21264、MIPS R10000、IBM POWER5、IBM z196、Oracle UltraSPARC T4、ARM Cortex A15、Apple M1 等
+
+#### Two Humps in a Modern Pipeline（現代 pipeline 的兩個隆起）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/5cc4b386-a8b6-4896-bdfa-5bc325eae322" />
+
+
+現代的 OoO pipeline 可以想像成有兩個「駝峰」：
+
+#### 1. **Hump 1：Reservation Stations（scheduling window，排程窗口）**
+   
+#### 2. **Hump 2：Reordering（reorder buffer，也叫 instruction window 或 active window）**
+
+整體流程是：`Fetch → Decode（in order）→ 進入保留站等待、無序執行（out of order）→ 透過 ROB 排回程式順序、依序 Retire（in order）`
+
+#### 通用 OoO Processor 架構 
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/353c2dab-7208-4ca4-965e-e08280e4a775" />
+
+
+#### IBM 360/91 的 Tomasulo 機器架構（歷史範例）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/873db4f7-12f3-4b6b-9650-8a73b28f8c41" />
+
+
+主要組成：
+
+* **Load buffers**：從記憶體載入資料
+* **Store buffers**：準備寫回記憶體
+* **FP Registers**：浮點暫存器
+* **Reservation Stations**：連接到各個 FP Functional Unit
+* **Common Data Bus（CDB）**：負責把運算結果的 tag 跟 value 廣播出去，讓所有在等待的保留站都能同時接收
+
+---
+
+### Register Alias Table（RAT）：重新命名的具體實作
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/3e830dec-84ad-4165-b853-1fda50f55499" />
+
+
+RAT（Register Rename Table）的每一個 entry 包含：
+
+| 欄位 | 意義 |
+|---|---|
+| Valid | 若為 1，代表這個暫存器目前的 `Value` 欄位就是正確的值，可以直接使用 |
+| Value | 暫存器目前的實際值（只有 Valid=1 時才有意義） |
+| Tag | 若 Valid=0，這裡存的是「將會產生這個值」的保留站（或 ROB）entry 編號，之後要靠這個 tag 去找到正確的值 |
+
+> **一句話**：Valid 為真就直接讀 Value；Valid 為假就記住 Tag，等那個 Tag 被廣播出來時再去抓 Value。
+
+---
+
+### Tomasulo's Algorithm 的詳細執行流程
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d26da6d1-89dc-4aec-84be-6f229937c82d" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/121e4bf3-515c-4189-9769-ca0fce4bd7c1" />
+
+
+#### 1. **若有空的保留站可用才能 rename**：把指令連同重新命名過的來源運算元（值或 tag）一起放進保留站；若沒有空的保留站，就 stall
+
+#### 2. **在保留站裡等待期間**，每條指令：
+   * 持續監看 Common Data Bus（CDB）上廣播的 tag，看是否跟自己記住的來源 tag 相符
+   * 一旦看到相符的 tag，就把對應的 value 抓下來存進保留站
+   * 當兩個來源運算元都備齊了，這條指令就「準備好可以被 dispatch」
+     
+#### 3. **一旦準備好，就把指令 dispatch 給對應的 Functional Unit 執行**
+
+#### 4. **指令在 Functional Unit 執行完畢後**：
+   * 搶 CDB 的使用權（arbitrate for CDB）
+   * 把「tag + value」廣播到 CDB 上
+   * Register File 也連接在 CDB 上：如果 register file 裡記錄的 tag 跟廣播出來的 tag 相符，就把這個廣播值寫進對應的暫存器（並把 valid bit 設為真）
+   * 回收這個 rename tag（因為系統裡已經不再需要用這個 tag 去指向任何東西了）
+
+---
+
+### 練習範例：計算不同架構下所需的 cycle 數
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/63af605a-71e4-4382-af36-61fb72b8734b" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/11ade338-2ecc-41bd-914d-9550cbd32503" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/77b70420-3d6f-47fb-9d63-5433f969e90e" />
+
+
+```
+MUL R3, R1, R2
+ADD R5, R3, R4
+ADD R7, R2, R6
+ADD R10, R8, R9
+MUL R11, R7, R10
+ADD R5, R5, R11
+```
+
+假設：`ADD` 執行需要 4 個 cycle，`MUL` 執行需要 6 個 cycle；只有一個加法器、一個乘法器。
+
+| 架構 | 所需 cycle 數 |
+|---|---|
+| 完全不管線化（non-pipelined） | 50 cycles（`4×7 + 2×11`） |
+| In-order-dispatch pipeline，**沒有** forwarding | 31 cycles |
+| In-order-dispatch pipeline，**有** forwarding | 25 cycles |
+| **Out-of-order** dispatch pipeline，有 forwarding | **20 cycles** |
+
+> 可以看到：光是允許 out-of-order dispatch，就比 in-order + forwarding 又再省下 5 個 cycle，這就是 latency tolerance 帶來的實際效益。
+
+---
+
+### 動手跑一次 Tomasulo's Algorithm 的模擬
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/31da427e-8e0c-422e-89a7-8344760c842a" />
+
+
+課程用下面這組指令，實際逐個 cycle 模擬 Tomasulo's Algorithm 的運作：
+
+```
+MUL R1, R2 -> R3
+ADD R3, R4 -> R5
+ADD R2, R6 -> R7
+ADD R8, R9 -> R10
+MUL R7, R10 -> R11
+ADD R5, R11 -> R5
+```
+
+模擬所需的硬體元件：
+
+* **Register Alias Table（RAT）**：每個架構暫存器的 Valid / Tag / Value
+* **Reservation Stations**：ADD 單元跟 MUL 單元各自有自己的保留站（entry 命名為 `a, b, c, d` 給 ADD，`x, y, z, t` 給 MUL）
+* **Common Data Bus**：ADD 跟 MUL 各自有自己的 tag/value 廣播匯流排
+
+#### 模擬過程中的幾個關鍵觀察點
+
+* **Cycle 2**：第一條 `MUL` 被 decode，檢查保留站空間（有，是 `x`）→ 把來源暫存器內容（或其 tag）放進 RS `x` → 把目的暫存器 `R3` 重新命名為 `x`（代表 `R3` 的新值將來自 RS `x`）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/b3f2a33f-272e-4617-a136-5d945e5b4f9b" />
+
+
+* **Cycle 3**：`MUL` 在 RS `x` 裡開始執行；同時第二條 `ADD` 被 decode 並分配到 RS `a`，把目的暫存器 `R5` 重新命名為 `a`
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/1d99240b-7d8f-4cc1-aead-b8a0157199ed" />
+
+
+* 中間有些指令因為來源運算元還沒 ready，會在保留站裡持續等待（例如需要等 `MUL` 算完、把 tag `x` 廣播出來後才能繼續）——這正是「Wakeup」機制：保留站裡等待的指令持續比對廣播出來的 tag，比對成功就把值抓進來、檢查是否已經全部齊全
+* **特別值得注意的細節**：`R5` 在這段程式裡**被重新命名了兩次**（先被第 2 條 `ADD` 命名一次，之後又被最後一條 `ADD` 命名一次）——這正是 Register Renaming 在實務上處理 Output Dependence 的具體展現：兩次寫入 `R5` 各自拿到不同的 tag，彼此互不干擾
+* 指令完成執行後，會搶 CDB 把自己的 tag 跟運算結果一起廣播出去，讓所有在等這個 tag 的保留站跟 register file 同時接收、更新
+* 整個模擬跑到 **Cycle 20** 時，最後一條指令才真正寫回結果——跟第 10 節表格算出來的「Out-of-order dispatch pipeline：20 cycles」完全吻合
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f43baf57-c19b-4159-8b1a-473872f3cb84" />
+
+
+---
+
+### 幾個關於硬體實作的思考題
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8307dd6b-a7a7-4e81-a537-f1dafaf740c5" />
+
+
+* **要做 tag 廣播與 value 擷取，硬體上需要什麼？**
+  * 答案：Wires、Comparators（比較器）、Logic（邏輯閘）——用來判斷值是否 valid、用來喚醒（wake up）一條指令
+* **Tag 一定要等於保留站 entry 的編號嗎？**
+  * 不一定，只要是獨一無二、能把「生產者」跟「消費者」串接起來的名稱都可以
+* **什麼東西可能變成 critical path（關鍵路徑）？**
+  * `Tag 廣播 → Value 擷取 → 指令被喚醒` 這一整條鏈路
+* **怎麼縮短這條 critical path？**
+  * 做更多層的 pipelining，以及搭配 prediction（預測）機制
+
+#### Dataflow Graph（資料流圖）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a18671cc-7ab3-432c-afe4-6bacd10a77ea" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4dd8a103-98d6-4993-a088-39f2274b7a81" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/96d96e1a-df51-45dd-93c0-33bf774e976a" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7897f107-5e91-4f13-a69b-d525728ad71d" />
+
+
+* 課程指出：只要觀察某個 cycle 當下的 RAT 與保留站狀態，其實可以「逆向工程」還原出這段程式對應的 dataflow graph（資料與運算之間的相依關係圖），這正好呼應了 Out-of-Order Execution 本質上就是在動態建構程式的 dataflow graph。
+<img width="1211" height="1079" alt="image" src="https://github.com/user-attachments/assets/7f26af50-8054-4ead-ba85-e2a495294d79" />
+
+
+---
+
+### 更多需要考慮的設計抉擇
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8fc3b869-3e80-44e8-ac53-ef344ffbe1c0" />
+
+
+* **保留站的 entry 什麼時候該被釋放（deallocate）？**
+* **保留站應該是每個 functional unit 各自獨立（distributed），還是全部共用一個集中式（centralized）的池子？**
+  * 牽涉 Centralized vs. Distributed 的設計取捨
+* **保留站跟 ROB 應該各自儲存實際的資料值，還是應該有一個集中式的 Physical Register File 統一存放所有資料值？**
+  * 這個問題在第 15 節會有具體答案
+* **指令究竟是在哪個精確的時間點廣播自己的 tag？**
+
+（還有許多其他 OoO 引擎的設計細節，這裡只列出課程提到的幾個方向）
+
+---
+
+### Out-of-Order Execution 加上 Precise Exceptions
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/212deb9e-f1eb-4ce1-984b-1dbbd2896dba" />
+
+
+結合上一堂課的內容，具體做法是：
+
+* 用 **Reorder Buffer（ROB）** 來把指令重新排回程式順序，再正式提交到 architectural state
+* **RAT（也稱為 frontend register file）** 在指令「執行完成」時就會更新——這是給後面指令快速拿到最新（但還是投機性）的值用的
+* 另外維護一份獨立的 **Architectural Register File**，只有在指令「retire（真正是機器裡最舊的，且已經執行完成）」時才會更新——**architectural register file 永遠按照程式順序更新**
+* 若發生 exception：
+  1. Flush 整條 pipeline
+  2. 把 architectural register file 的內容複製回 frontend register file（RAT），讓前端狀態回到跟架構狀態一致
+
+---
+
+### 問題：資料值被重複存放在太多地方（Value Replication）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/43ff29ba-5517-4b56-b83e-9844afd69bf9" />
+
+
+在前一節的設計裡，同一個資料值可能同時存在於：**保留站、ROB、Frontend Register File、Architectural Register File** 好幾個地方，造成大量重複（value replication），浪費硬體與頻寬。
+
+#### 解法：改用一個集中式的 Physical Register File（PRF）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/3ee34d2c-7c68-42c4-8a54-bbde99d1cb42" />
+
+
+* 保留站跟 ROB 裡**不再直接存放實際的資料值**，而是**存放指向 PRF 裡某個實體暫存器（Physical Register, PR）的指標（pointer）**
+* 維護兩份「暫存器對照表（Register Map）」，裡面存的都只是指標，而不是真正的資料：
+  * **Frontend / Future Register Map**：用於 renaming，指向「最新、投機性」的值
+  * **Architectural Register Map**：用於維護 precise state，指向「已經確認無誤」的值
+* 實際資料只在 **PRF** 裡存一份，避免到處複製
+
+#### 搭配 PRF 之後的流程
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7c061a60-462b-4331-ba00-53b2a1ed1614" />
+
+
+1. **Decode/Rename 時**：分配一個新的目的 PR（DestPR）給目的暫存器，並更新 Frontend Register Map
+2. **執行前**：到 PRF 裡讀出來源運算元真正的值
+3. **執行完成後**：把結果寫回 PRF 裡對應的 PR
+4. **Retirement 時**：才用這個 DestPR 去更新 Architectural Register Map
+
+> 絕大多數現代處理器都採用這種設計：ROB 負責維持指令的 in-order retirement，一個集中式 Physical Register File 統一存放所有（investigative 與 architectural）的暫存器資料，整數與浮點通常還是分開各自一份 PRF。這個設計完全避免了前一節「資料值到處複製」的問題。
+
+---
+
+### 真實處理器範例（課程點名列出，點到為止）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c5d4e7b0-8c7b-4fc9-90e6-a44d1e3c715b" />
+
+
+* **Intel Pentium Pro（1995）**：最早採用 Out-of-Order 的消費級處理器之一
+* **Intel Pentium 4（2000）**：有自己的 OoO 微架構設計（NetBurst）
+* **Alpha 21264**
+* **MIPS R10000**
+* **IBM POWER4**：雙核心、out-of-order，每個核心有 100-entry 的 instruction window，8-wide 的 instruction fetch/issue/execute，混合式（local+global）分支預測器，1.5MB 8-way L2 cache，並有積極的 stream-based prefetching
+* **IBM POWER5**
+* **AMD Zen2（2019）**
+* **Apple M1 FireStorm（2020）**
+
+---
+
+### 本堂課重點概念總整理（Summary of OOO Execution Concepts）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/6e79a771-dee8-4174-906c-3c901a0d80fb" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/badb05ef-b099-4736-83d4-0ae6e1525e6c" />
+
+
+* **Register Renaming**：消除假性相依（anti / output dependence），並且把「資料的生產者」跟「消費者」串連起來
+* **Reservation Stations 的緩衝機制**：讓獨立指令不會被卡住的指令擋住，可以繼續往前推進
+* **Tag Broadcast**：讓指令之間可以互相「溝通」某個值是否已經算好、準備好了
+* **Wakeup and Select**：讓指令真正能夠以 out-of-order 的順序被 dispatch 出去
+
+---
+
+### Out-of-Order Execution 的本質：Restricted Dataflow（受限的資料流）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/bdcff151-7701-41e6-ab2c-ec00d8b05fab" />
+
+
+* 一個 OoO 引擎，其實就是在**動態建構程式一部分的 dataflow graph**
+* 這個 dataflow graph 的範圍，被限制在所謂的 **Instruction Window（指令視窗）** 之內
+  * Instruction Window：所有「已經 decode、但還沒 retire」的指令集合
+* 留給大家思考的問題：
+  * 能不能對整個程式都這樣做？為什麼會想要這樣做？
+  * 換句話說：怎麼樣才能擁有一個很大的 instruction window？
+  * 用 Tomasulo's Algorithm 能有效率地做到這件事嗎？
+* **延遲容忍度的極限**：如果某條指令要花到 1000 個 cycle 才能完成，機器需要繼續 decode 多少條後續指令，才能一直找到獨立的工作來做？——**真正限制 Tomasulo's Algorithm 延遲容忍能力的關鍵，就是 Instruction Window 的大小**（能同時容納多少「已 decode 但未 retire」的指令）
+
+---
 
 [回目錄](#toc)
 
