@@ -55,8 +55,8 @@
 | [9/22](#m09d22) | 影片：Digital Design and Computer Architecture(Spring 2025) L12 |
 | [9/23](#m09d23) | 影片：Digital Design and Computer Architecture(Spring 2025) L13 |
 | [9/30](#m09d30) | 資料：複習7/3 - 9/23 內容 |
-| [10/04](#m10d04) | 刷題：複習 HDLBits 7/3 - 9/30 進度|
-| [10/05](#m10d05) | 影片：Digital Design and Computer Architecture(Spring 2025) L14 |
+| [10/4](#m10d04) | 刷題：複習 HDLBits 7/3 - 9/30 進度|
+| [10/5](#m10d05) | 影片：Digital Design and Computer Architecture(Spring 2025) L14 |
 
 
 
