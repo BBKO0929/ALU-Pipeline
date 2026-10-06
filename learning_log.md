@@ -57,6 +57,7 @@
 | [9/30](#m09d30) | 資料：複習7/3 - 9/23 內容 |
 | [10/4](#m10d04) | 刷題：複習 HDLBits 7/3 - 9/30 進度|
 | [10/5](#m10d05) | 影片：Digital Design and Computer Architecture(Spring 2025) L14 |
+| [10/6](#m10d06) | 影片：Digital Design and Computer Architecture(Spring 2025) L15 |
 
 
 
@@ -9507,6 +9508,579 @@ ADD R5, R11 -> R5
 * **延遲容忍度的極限**：如果某條指令要花到 1000 個 cycle 才能完成，機器需要繼續 decode 多少條後續指令，才能一直找到獨立的工作來做？——**真正限制 Tomasulo's Algorithm 延遲容忍能力的關鍵，就是 Instruction Window 的大小**（能同時容納多少「已 decode 但未 retire」的指令）
 
 ---
+
+[回目錄](#toc)
+
+---
+<a id="m10d06"></a>
+
+## 2026 年 10 月 6 日
+
+## 今日進度：
+### 資料：
+1. [Digital Design and Computer Architecture(Spring 2025)](https://safari.ethz.ch/ddca/spring2025/doku.php?id=start)
+2. [Digital Design and Computer Architecture, David Harris and Sarah Harris](https://www.sciencedirect.com/book/9780123704979/digital-design-and-computer-architecture)
+
+### 影片：
+1. [Digital Design and Computer Architecture(Spring 2025) L15](https://www.youtube.com/watch?v=5kGI2EHURSY&list=PL5Q2soXY2Zi9Eo29LMgKVcaydS7V1zZW3&index=18)
+
+
+## 關鍵知識/詞彙：
+### 留給大家思考的問題（Questions to Ponder）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8388cb86-6efd-4484-b0ff-f5966628782f" />
+
+
+* **為什麼 OoO 執行是有益的？**
+  * 核心答案：**Latency tolerance（延遲容忍）**——藉由同時執行獨立的運算，容忍多週期運算帶來的延遲
+  * 反問：如果所有運算都只要 1 個 cycle，OoO 還有意義嗎？
+* **如果一條指令要花 1000 個 cycle 呢？**
+  * 要繼續不斷 decode 新指令、不讓 pipeline 停下來，需要多大的 instruction window？
+  * OoO 究竟能容忍多少 cycle 的延遲？
+  * **真正限制 Tomasulo's Algorithm 延遲容忍能力的關鍵，就是 Instruction Window 的大小**——也就是機器裡能同時容納「已 decode 但未 retire」的指令數量
+
+---
+
+### Out-of-Order Execution 的優缺點整理
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7e7663f7-395f-4e0c-985b-5eb5131dbede" />
+
+
+**優點**
+
+* **Latency tolerance**：允許獨立指令在長延遲運算存在的情況下依然能執行完成，效能比 in-order 執行更好
+* **Irregular parallelism（不規則並行性）**：能動態找出並利用程式裡的平行運算機會，這種平行性在不規則的程式碼裡，靜態（編譯時期）很難找到或利用
+
+**缺點**
+
+* **複雜度更高**：可能拉長 critical path 延遲，進而影響 clock cycle time
+* **需要更多硬體資源**
+
+> 複習公式：整個程式的執行時間 = `{指令數} x {平均 CPI} x {clock cycle time}`
+
+---
+
+### Instruction-Level Concurrency 的其他方法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/1b9b61b7-9c16-47cc-aab8-ead999ae4b9b" />
+
+
+除了前面講的 Pipelining 與 Out-of-order Execution，課程列出整個 ILP（Instruction-Level Parallelism）家族的方法：
+
+* Pipelining
+* Fine-Grained Multithreading
+* Out-of-order Execution
+* **Dataflow（在 ISA 層級）**
+* **Superscalar Execution**
+* VLIW（Very Long Instruction Word）
+* SIMD Processing（向量/陣列處理器、GPU）
+* Decoupled Access Execute
+* Systolic Arrays
+
+這堂課接下來詳細展開其中兩個：**Dataflow** 跟 **Superscalar Execution**。
+
+---
+
+### Dataflow（資料流）：挖掘不規則並行性
+
+#### 核心概念
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f465017e-d623-4f75-be6f-3ff2a962330f" />
+
+* **資料是否就緒，決定了執行順序**（而不是程式裡寫的先後順序）
+* 一個 dataflow node（節點）只要它的來源都準備好了，就會「觸發（fire）」執行
+* 整個程式可以被表示成一張「dataflow graph（資料流圖）」，由一堆節點組成
+
+#### 在不同層級的成敗
+
+* **Dataflow 在 ISA 層級**（也就是直接把 dataflow 模型暴露給程式設計者/編譯器）**並沒有特別成功**
+* **Dataflow 在 microarchitecture 層級的實作**（也就是硬體內部偷偷用 dataflow 方式調度，但對外仍然維持 von Neumann 的循序語意）**非常成功**——**Out-of-order Execution 正是最具代表性的例子**
+* 近期：把 Dataflow 的概念拿去映射（map）到可重組硬體（如 FPGA）上，也有不錯的成功案例
+
+#### ISA 層級的設計取捨：要不要有 Program Counter？
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a3b47647-7a58-49eb-ae56-7d44124036a0" />
+
+
+| 選擇 | 特性 |
+|---|---|
+| **有 PC**（Control-driven，循序執行） | 指令是因為「PC 指到它」才被執行；PC 會自動依序往下走（除了控制流指令會改變它）——也就是傳統循序執行模型 |
+| **沒有 PC**（Data-driven，平行執行） | 指令是因為「所有運算元的值都已經準備好」才被執行——也就是 dataflow 模型 |
+
+這個選擇牽涉到許多高層次的取捨：對一般程式設計師來說好不好寫？好不好編譯？能不能有效挖掘平行性？硬體複雜度如何？
+
+#### ISA 層級 Dataflow 的優缺點
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/df045c21-1c72-4c2f-b609-f219096c688f" />
+
+
+**優點**
+
+* 非常擅長挖掘「不規則」的並行性
+* 只有真正的資料相依才會限制處理順序（真正做到「資料準備好就做」）
+* 能比 von Neumann 模型暴露出更多的平行性
+
+**缺點**
+
+* **沒有精確的狀態語意（no precise state semantics）**：debug 非常困難、中斷/例外處理也非常困難
+* 硬體額外開銷龐大（需要大量的 tag 比對、data/tag 儲存）
+* 平行度可能「太多」，反而需要額外機制去控制平行度
+* 如何支援可變（mutable）的資料結構，也是個尚待解決的問題
+
+#### ISA 層級 與 Microarchitecture 層級的取捨，其實是同一組取捨的不同層次
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/10d5687b-019f-4dd6-9ba3-7481bf1084ee" />
+
+
+* **ISA 層級**：決定「程式設計師看到的」是循序控制流（control-flow）還是資料流（dataflow）執行順序
+* **Microarchitecture 層級**：決定「硬體底層實際上」用什麼順序去執行指令
+  * 只要硬體最終呈現給軟體的結果，仍然遵守 ISA 規定的語意（即程式設計師該看到的循序結果），**microarchitecture 內部其實可以用任何順序去真正執行指令**——這正是 OoO 執行能夠存在的根本原因
+
+#### 延伸閱讀
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/70a1721f-7b3e-4cf2-bcde-0c8eae6535c2" />
+
+
+* Dennis and Misunas, *A preliminary architecture for a basic data-flow processor*, ISCA 1974
+* Gurd et al., *The Manchester prototype dataflow computer*, CACM 1985
+* **Restricted Dataflow 的歷史文獻（HPS 系列）**：
+  * Patt, Hwu, Shebanow, *HPS, a new microarchitecture: rationale and introduction*, MICRO 1985
+  * Patt et al., *Critical issues regarding HPS, a high performance microarchitecture*, MICRO 1985
+  * Hwu and Patt, *HPSm, a high performance restricted data flow architecture having minimal functionality*, ISCA 1986
+
+---
+
+### Superscalar Execution（超純量執行）
+
+#### 核心想法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4691d194-fa31-43d9-a8a6-cb58efe71c28" />
+
+
+**一個 cycle 內同時 Fetch、Decode、Execute、Retire 多條指令**（N-wide superscalar，代表一個 cycle 可以處理 N 條指令）。
+
+* 需要額外的硬體資源才能做到這件事
+* 硬體必須在「同時被 fetch 進來的多條指令之間」做相依性檢查（dependence checking）
+
+#### Superscalar 跟 Out-of-order 是互相獨立（orthogonal）的概念
+
+兩者可以自由組合，理論上有四種處理器：
+
+| | Scalar（純量） | Superscalar（超純量） |
+|---|---|---|
+| **In-order** | 傳統 in-order 處理器 | In-order Superscalar |
+| **Out-of-order** | 傳統 OoO 處理器（如前兩堂課講的） | OoO Superscalar（現代高效能處理器主流） |
+
+#### In-Order Superscalar 範例：理想狀況（IPC = 2）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f58423f1-dbea-4e67-871e-49479c925534" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/442ab736-863e-4cf0-bbb3-fe368515220b" />
+
+
+用一組 6 條指令、彼此沒有相依關係的程式（`lw, add, sub, and, or, sw`），在一個「理想 IPC = 2」的 in-order superscalar 處理器上執行：
+
+* 因為指令之間彼此獨立（沒有資料相依），兩條兩條一組依序送進 pipeline
+* 結果：**6 條指令，3 個 cycle 就發射（issue）完畢，實際 IPC 確實達到理想值 2**
+
+#### In-Order Superscalar 範例：有相依關係時（IPC 掉到 1.2）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8f47f533-b8c0-44d6-b1e3-96c711917b8b" />
+
+
+同樣是 6 條指令，但這次彼此之間有資料相依（例如後面的指令要用到前面指令剛算出來的值）：
+
+* 因為是 **in-order** 架構，一旦某條指令要等它的來源值，連帶讓同一組裡「原本可以先發射」的指令也被迫一起卡住
+* 結果：**理想 IPC 仍是 2，但實際只達到 IPC = 1.2**（6 條指令，花了 5 個 cycle 才發射完）
+* 投影片留了一個思考題：**能不能把這些指令重新排序，讓 IPC 回到 2？**（提示：這正是編譯器指令排程 / 或改用 OoO 硬體可以解決的問題）
+
+---
+
+### 複習：處理資料相依的六種根本方法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/9993a6e5-a734-4a91-9e61-4d2462764c35" />
+
+
+課程在這裡總結了處理 **flow dependence（資料流相依）** 的六種基本手段：
+
+1. **偵測後乾等**：偵測到相依，就等到值真正出現在 register file 裡才繼續（最笨的做法）
+2. **偵測後轉送（forward/bypass）**：偵測到相依，直接把資料旁路轉送給需要它的指令
+3. **軟體層級直接消除相依**：在編譯時期就重新安排好，硬體完全不需要偵測
+4. **偵測後把它移到旁邊，讓獨立指令先走**：也就是 Out-of-order Execution 的做法（Reservation Station）
+5. **預測需要的值，先投機（speculatively）執行，之後再驗證**：即 Value Prediction
+6. **乾脆做別的事（Fine-grained multithreading）**：不需要偵測，直接切去跑別的執行緒的指令
+
+> Superscalar 處理器可以同時綜合運用以上全部六種手段。
+
+---
+
+### Superscalar Execution 的優缺點
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/26866063-e36f-429e-b8cb-a23240f2606e" />
+
+
+**優點**
+
+* 更高的指令吞吐量（throughput）
+* 更高的 IPC（instructions per cycle），也就是更低的 CPI
+
+**缺點**
+
+* 相依性檢查的複雜度更高：需要在「同時處理的多條指令之間」做相依性檢查；若是 OoO 處理器，Register Renaming 的複雜度也會跟著提高；同樣可能拉長 critical path、影響 clock cycle time
+* 需要更多硬體資源
+
+> 同樣複習公式：整個程式執行時間 = `{指令數} x {平均 CPI} x {clock cycle time}`
+
+---
+
+### 真實處理器的歷史脈絡（課程點名列出，依時間排序）
+
+| 處理器 | 年份 | 類型 |
+|---|---|---|
+| Intel Pentium | 1993 | In-Order Superscalar |
+| Alpha 21164 | 1995 | In-Order Superscalar |
+| Intel Pentium Pro | 1995 | **Out-of-Order + Superscalar**（業界第一批同時具備兩種特性的處理器之一） |
+| Alpha 21264 | 1998 | Out-of-Order + Superscalar |
+| Intel Pentium 4 | 2000 | Out-of-Order + Superscalar |
+| AMD Zen / Zen2 | 2019 | 現代 Out-of-Order Superscalar |
+| Apple M1 Firestorm | 2020 | 現代 Out-of-Order Superscalar |
+| Intel Lioncove | 近期 | 現代 Out-of-Order Superscalar 設計代表 |
+
+> 可以看出一個明顯的歷史趨勢：**1990 年代前半，處理器先學會 Superscalar（一次處理多條指令）；到了 1995 年左右的 Pentium Pro，才真正把 Out-of-order 跟 Superscalar 結合在一起**，而這個組合從此之後一路成為高效能處理器的標準做法，延續至今天的現代處理器設計。
+---
+### 複習：什麼是 Control Dependence
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7d1e3a9f-e709-48b1-9403-38fc00aebf8f" />
+
+
+* 每個 cycle，pipeline 都要知道「下一個要 fetch 的指令位址（PC）是什麼」
+* **所有指令其實都「控制相依」於前一條指令**——因為要先知道前一條指令是什麼，才能決定下一個要抓的 PC
+* 如果 fetch 到的是「非控制流指令」：下一個 PC 很簡單，就是「目前位址 + 指令長度」
+* 如果 fetch 到的是「控制流指令（branch）」：下一個 PC 要怎麼決定？
+* 更根本的問題：**我們甚至要先知道「這條指令是不是一個 branch」才能決定怎麼處理它**
+
+---
+
+### Branch 的五種類型
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/b30b846c-f728-4e5c-8f3a-5dbf5307e4b0" />
+
+
+| 類型 | Fetch 當下的方向 | 可能的下一個 fetch 位址數量 | 什麼時候才能確定下一個 fetch 位址 |
+|---|---|---|---|
+| Conditional（條件分支） | 未知 | 2 個 | Execution 階段（取決於暫存器內容） |
+| Unconditional（無條件分支） | 永遠 taken | 1 個 | Decode 階段（PC + offset） |
+| Call（呼叫函式） | 永遠 taken | 1 個 | Decode 階段（PC + offset） |
+| Return（返回） | 永遠 taken | 很多個 | Execution 階段（取決於暫存器內容） |
+| Indirect（間接跳轉） | 永遠 taken | 很多個 | Execution 階段（取決於暫存器內容） |
+
+> 不同類型的分支，需要用不同的方式處理。
+
+要判斷這三個指標，不需要硬背，而是要看指令的「邏輯語義（語法）」**、**「目標位址的編碼方式」**，以及**「計算位址所需的資料在哪個階段準備好」。
+
+---
+
+#### 如何知道「Fetch 當下的方向 (Direction)」？
+看這條指令「跳轉是否帶有條件」：
+
+#### 1. ** 未知（Unknown）**：**條件分支（Conditional Branch）**
+* 如 `beq r1, r2, label`（如果 $r_1 == r_2$ 才跳轉）。在 Fetch 當下，硬體還沒讀取暫存器也沒做比較，所以不知道會跳還是不跳。
+
+#### 2. **永遠跳轉（Always Taken）**：**無條件分支 / Call / Return / Indirect**
+
+* 如 `j label`、`call func`、`ret` 等。這些指令在語義上就是「只要遇到就必須跳轉」，因此 Fetch 當下方向是 $100\%$ 確定的。
+---
+
+#### 如何知道「可能的下一個 Fetch 位址數量」？
+看指令的「目標位址（Target Address）是如何獲得的」：
+
+#### 1. **2 個**（條件分支 Conditional）
+* 只有兩種可能：**不跳轉**（$ \text{PC} + \text{指令長度}$ ）或 **跳轉**（$ \text{PC} + \text{offset} $）。
+
+#### 2. **1 個**（無條件分支 Unconditional / Call）
+* 跳轉目標位址直接寫死在指令內部的常數（Offset）中，即 $ \text{PC} + \text{offset} $ ，所以**只有唯一的固定目標位址**。
+  
+#### 3. **很多個（Many）**（Return / Indirect）
+* 跳轉目標位址存在**暫存器**或**記憶體/堆疊**中（例如 `jr $ra` 或 `jmp [eax]`）。因為暫存器裡的數值在程式執行時會隨時改變，理論上可以指向記憶體中的任意位址，所以有無限多種可能。
+---
+
+#### 如何知道「什麼時候才能確定下一個 Fetch 位址」？
+看計算出正確 PC 位址「最晚需要拿到什麼資料」：
+
+#### * **Decode 階段（解碼階段）**：
+1. * **所需資料**：只需要指令本身的 **PC 與常數（Offset）**。
+2. * **適用類型**：Unconditional、Call。
+3. * **原因**：硬體只要在 Decode 階段把指令解碼，拿到裡面的 Offset 並加上 PC，就能算出目標位址。
+
+#### * **Execution 階段（執行階段）**：
+1. * **所需資料**：需要 **ALU 計算結果** 或 **讀取暫存器（Register Dependency）**。
+2. * **適用類型**：
+	* **Conditional**：需要等 EX 階段的 ALU 比較完暫存器（如判斷是否相等），才能確定「到底要不要跳」。
+	* **Return / Indirect**：需要等到 EX 階段（或 ID 階段讀完暫存器）才能拿到暫存器內部儲存的真實位址。
+---
+
+#### 邏輯總結速查表
+
+| 指令類型 | 方向為何是這樣？ | 位址數量為何是這樣？ | 確定時間為何是這樣？ |
+| --- | --- | --- | --- |
+| **Conditional** | 有條件，Fetch 時還沒比對 -> **Unknown** | 不是跳就是不跳 -> **2 個** | 需要用 ALU 比較暫存器 -> **Execution** |
+| **Unconditional / Call** | 無條件，遇到必跳 -> **Always taken** | 目標寫死在 Offset -> **1 個** | 解碼出 Offset 就能算 -> **Decode** |
+| **Return / Indirect** | 無條件，遇到必跳 -> **Always taken** | 位址來自暫存器，數值會變 -> **Many** | 需要讀取暫存器數值 -> **Execution** |
+---
+
+### 處理 Control Dependence 的六種方法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/2e34f3bb-b716-4b3e-8b8a-51617d52b468" />
+
+
+要維持 pipeline 裡塞滿「正確順序」的動態指令，當遇到控制流指令時，有以下幾種可能的解法：
+
+1. **Stall（停頓）**：停住 fetch，直到確定下一個 fetch 位址為止
+2. **Branch Prediction（分支預測）**：直接猜下一個 fetch 位址
+3. **Delayed Branching（延遲分支，branch delay slot）**
+4. **Fine-grained multithreading（細粒度多執行緒）**：去做別的事
+5. **Predicated Execution（條件式執行）**：乾脆消除控制流指令本身
+6. **Multipath Execution（多路徑執行）**：如果兩條可能路徑的位址都知道，就兩條都先抓進來
+
+---
+
+### Stall——一個「看似合理」但其實很糟的做法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/aafb9e81-9895-4993-8e22-086b5dc1a1dc" />
+
+
+用時序圖具體展示：如果每次遇到控制流指令都乾等到確定下一個 PC 才繼續 fetch：
+
+* **會浪費掉 50% 的 cycle 在停頓上**——而且這還只是「非控制流指令」跟「無條件分支」的情況
+* **條件分支（conditional branch）的情況只會更糟**，因為它要等到 Execution 階段才能確定方向
+
+---
+
+### Fine-Grained Multithreading（細粒度多執行緒）
+
+#### 核心想法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/3ef1bc85-d939-44a8-8caa-86a5701fb431" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c4926a20-0a80-4fe2-a69c-aed1ff46d2df" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/845a161d-1ea5-4f0b-9af7-e77749f7dc92" />
+
+
+* 每個 cycle 都從「不同的執行緒（thread）」去 fetch 指令，確保同一個執行緒的兩條指令**不會同時出現在 pipeline 裡**
+* 硬體需要準備多組 thread context（每個執行緒各自的 PC + register file）
+* 各執行緒彼此完全獨立
+* 同一個執行緒的下一條指令，要等到前一條分支/指令真正完成後才會被 fetch
+
+#### 優點
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c08dce47-ea0e-4ba3-b8e7-8d4fab33779b" />
+
+
+* 不需要在同一執行緒內部做控制/資料相依檢查的邏輯（因為同一時間 pipeline 裡只有這個執行緒的一條指令）
+* 不需要分支預測邏輯
+* 原本會變成「泡泡（bubble）」的 cycle，可以拿去執行別的執行緒的有用指令
+* 系統整體吞吐量、延遲容忍度、pipeline 利用率都會提升
+
+#### 缺點
+
+* 額外硬體複雜度：要維護多組硬體 context（PC、register file 等）、還要有挑選執行緒的邏輯
+* **單一執行緒的效能會變差**（因為同一個執行緒每隔 N 個 cycle 才會被 fetch 一次）
+* 多個執行緒之間會在 cache、記憶體上互相搶資源（resource contention）
+* 如果牽涉到 load/store，執行緒之間可能還是需要相依性檢查邏輯
+
+> 歷史範例：CDC 6600（Thornton, 1964）、Sun Niagara（32-way 多執行緒 SPARC 處理器，2005）。
+
+---
+
+### Branch 問題到底有多嚴重
+
+#### 問題背景
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f118c261-1ce0-46a7-b238-4617e222ce80" />
+
+
+* 控制流指令（分支）佔所有指令的 **15% ~ 25%**
+* 在 pipelined 處理器裡，分支指令的「下一個 fetch 位址」沒辦法在 N 個 cycle 內馬上確定（N = 最短的分支解析延遲）
+* 如果一次 fetch W 條指令（W-wide superscalar），**一次分支預測錯誤，就會浪費掉 `N x W` 個指令槽位**
+
+#### 具體數字範例
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a5a7fed8-5911-4e86-ac6e-e600eeb19abe" />
+
+
+假設：`N = 20`（20 級 pipeline）、`W = 5`（5-wide superscalar fetch）、每 5 條指令就有 1 條是分支（每個 5 指令區塊結尾都是分支），要 fetch 500 條指令：
+
+| 預測準確率 | 計算方式 | 總 cycle 數 | 額外多 fetch 的指令比例 |
+|---|---|---|---|
+| 100% | `100`（全部都在正確路徑上） | 100 cycles | 0%，IPC = 500/100 |
+| 99% | `100 + 20*1` | 120 cycles | 多 fetch 20% |
+| 90% | `100 + 20*10` | 300 cycles | 多 fetch 200% |
+| 60% | `100 + 20*40` | 900 cycles | 多 fetch 800% |
+
+> 這個表格清楚顯示：**預測準確率每下降一點點，浪費掉的工作量會急遽暴增**——這就是為什麼分支預測的準確度對效能影響如此巨大。
+
+---
+
+### Branch Prediction（分支預測）核心概念
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d760d80a-f31f-4f5b-ac8b-153896758ad2" />
+
+
+* **想法**：直接「猜」下一個要 fetch 的指令位址，正確的話完全不會浪費任何 cycle
+* 用一個簡單例子展示：有分支預測時，12 cycle 就能跑完的工作，沒有分支預測（stall 到底）的話需要更多 cycle
+
+#### 預測錯誤的代價（Misprediction Penalty）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/09f56403-51e6-4739-b130-7a54a732c69f" />
+
+
+* 一旦預測錯誤，就必須把「沿著錯誤路徑已經 fetch 進來的指令」**全部 flush（清掉）**，並重新從正確的位址開始 fetch
+* 這個清空重來的過程，正是分支預測錯誤帶來的效能損失（penalty）
+
+---
+
+### 最簡單的預測方式：永遠猜 `NextPC = PC + 4`
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/1edf8221-7212-4e6b-a1ab-08d49f21fd93" />
+
+
+* 永遠預測「下一條循序指令」就是下一個要執行的指令（這也是一種「下一個 fetch 位址預測」、也是一種「分支預測」的形式）
+
+#### 怎麼讓這個簡單策略更有效？
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/bc74e409-dda7-4d4e-9f4b-1ebf65979c21" />
+
+
+**想法：盡量提高「下一條循序指令真的就是下一個要執行的指令」這件事發生的機率**
+
+* **軟體面做法**：重新安排程式的控制流圖（control flow graph），讓「比較可能發生」的那條路徑，被排在分支的 **not-taken（不跳轉）** 路徑上
+  * 參考：Pettis & Hansen, *Profile guided code positioning*, PLDI 1990（profile-guided code positioning）
+* **硬體面做法**：把實際執行過的指令軌跡快取起來（Trace Cache）
+
+#### 另一個讓它更有效的方向：乾脆減少控制流指令本身
+
+1. **合併條件判斷（predicate combining）**：去掉不必要的控制流指令，只測試一次
+2. **Predicated Execution（if-conversion）**：把控制相依直接轉換成資料相依
+
+#### Pipeline 時序圖：永遠猜 PC+4 的運作方式
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/5c0f8e4c-86c9-4702-8730-087ac67d6d8d" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/2a0e26dd-0a03-4de1-973c-6ba555fc0655" />
+
+
+* 每個 cycle 正常依序 fetch（`PC`、`PC+4`、`PC+8`...）
+* 當某條指令（`Insth`）在 ALU 階段被判定是分支、且算出真正的分支條件與目標位址之後：
+  * 若猜對了，什麼事都不用做
+  * 若猜錯了，就要 fetch 真正的分支目標（`Insttarget`），並且把「從 `Insth` 之後、沿著錯誤路徑已經抓進來的所有指令」全部 flush 掉
+
+---
+
+### 效能分析：CPI 計算範例
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a4140389-9297-4af2-92a5-89e9457a36c8" />
+
+
+假設：沒有資料相依造成的停頓；20% 的指令是控制流指令；其中 70% 的控制流指令實際上會 taken（跳轉）；猜錯分支的代價是 **2 個 bubble**。
+
+```
+CPI = 1 + (0.20 * 0.70) * 2
+    = 1 + 0.14 * 2
+    = 1.28
+```
+
+> 公式結構：`CPI = 1 + (猜錯的機率) x (猜錯的代價)`
+
+**思考題**：我們能不能想辦法降低這個公式裡的任何一項（猜錯機率 或 猜錯代價）？
+
+---
+
+### 降低 Misprediction Penalty 的做法：提早解析分支
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c6e49179-d559-46c8-82d5-b826407c7e06" />
+
+
+* **想法**：把「計算分支條件與目標位址」這件事，提早搬到 **Decode 階段** 就完成，而不是拖到 Execute 階段才知道
+* 這樣一來，猜錯分支的代價（要 flush 掉的指令數）就會變少
+* 重新計算 CPI：
+
+```
+CPI = 1 + (0.20 * 0.70) * 1 = 1.14
+```
+
+* 跟前一節的 `1.28` 相比，光是把分支解析提早一個階段，就讓 CPI 下降了不少
+* 投影片也拋出一個思考題：**提早解析分支真的是個好主意嗎？**（提示：這可能需要在 Decode 階段就加入額外的相依性偵測邏輯，增加該階段的複雜度與硬體成本，屬於設計上的 trade-off）
+
+---
+
+### 進階 Branch Prediction：要預測三件事
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/6d73e4d5-ac97-4b8b-ac87-9cf346d81d0f" />
+
+
+要讓分支預測在 Fetch 階段就真正生效（完全不浪費 cycle），需要同時預測三件事：
+
+1. **這條被 fetch 的指令是不是一個 branch？**
+2. **（條件分支的）跳轉方向**：要 taken 還是 not-taken？
+3. **分支目標位址**（如果是 taken 的話）
+
+#### 關鍵觀察：目標位址通常不會變
+
+* 對同一個 conditional direct branch 而言，**不同次執行時，目標位址通常是一樣的**
+* 解法：把「上次執行時算出來的目標位址」記住，下次用同一個 PC 去查表就好
+* 這個查表結構叫做 **Branch Target Buffer（BTB）**，也叫 Branch Target Address Cache
+
+#### Fetch 階段的實際運作（搭配 BTB 與方向預測器）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/128c7116-535c-44a7-829d-28f84e685458" />
+
+
+* 用目前的 PC，同時查詢「方向預測器（是否 taken？）」與「BTB（目標位址是什麼？）」
+* 如果方向預測器說會 taken、且 BTB 裡有命中（hit）對應的目標位址，下一個 fetch 位址就直接用 BTB 查到的目標位址；否則就照常用 `PC + 指令長度`
+
+#### 更進階的方向預測：加入分支歷史
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/160109fa-08fc-469a-b49b-ea16a4f55f8d" />
+
+
+* 除了單純查表，還可以加入 **Global branch history（全域分支歷史）**，把它跟 PC 做 XOR 等運算後，再去查方向預測器與 BTB——讓預測器能考慮到「最近幾次分支的走向模式」，藉此提高準確度
+
+#### 三件事分別怎麼達成
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/56a2255f-0222-4134-bad4-1b469a67421d" />
+
+
+1. **這是不是 branch？**
+   * 可以用 BTB 來判斷：如果 BTB 針對這個 PC 有回傳目標位址，就代表它是分支
+   * 或者，可以直接在 instruction cache/memory 裡存一些「分支相關的 metadata bits」（等於是部分預先解碼）
+2. **方向預測**：這是接下來的重點主題（下一節開始介紹各種方案）
+3. **目標位址**：靠 BTB 達成
+
+---
+
+### 分支方向預測（Direction Prediction）的各種方案
+
+#### 編譯時期（Static，靜態）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/1f4ea867-41e1-4848-bf48-265002784120" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/b3c696ca-997e-413b-9e75-a7229748d16f" />
+
+
+* Always not taken（永遠猜不跳轉）
+* Always taken（永遠猜跳轉）
+* BTFN（Backward Taken, Forward Not taken：往回跳的猜 taken，往前跳的猜 not-taken）
+* Profile-based（根據程式剖析資料，猜「比較常見」的方向）
+* Program analysis based（根據程式分析結果來猜方向）
+
+#### 執行時期（Dynamic，動態）
+
+* Last-time prediction（單一位元：用上一次的方向直接當作這次的預測）
+* Two-bit counter based prediction（兩位元計數器）
+* Two-level prediction（兩層式預測：global 與 local 歷史）
+* Hybrid（混合式，結合多種預測器）
+* 進階演算法（例如使用 perceptron、geometric history 等）
+
+---
+
+### 靜態分支預測細節
+
+#### Always Not-Taken
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/91e10340-0311-4bf1-858d-67dc737ed4b5" />
+
+
+* 實作簡單：不需要 BTB，也不需要方向預測邏輯
+* 準確率偏低：約 **30% ~ 40%**（針對條件分支）
+* 備註：編譯器可以主動把「比較可能發生」的路徑排成 not-taken 路徑，讓這個簡單策略更有效
+
+#### Always Taken
+
+* 不需要方向預測邏輯
+* 準確率較好：約 **60% ~ 70%**（針對條件分支）
+* 原因：往回跳的分支（loop 迴圈分支）通常都會 taken；「往回跳」的定義是目標位址比分支本身的 PC 還要小
+
+#### BTFN（Backward Taken, Forward Not-taken）
+
+* 把「往回跳的（迴圈）分支」預測為 taken，其餘的分支預測為 not-taken
+
+#### Profile-based（基於剖析資料）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c7dd41a4-8528-4965-a763-efbead8d96e9" />
+
+
+* **想法**：編譯器透過一次剖析執行（profile run），針對每一個分支各自判斷「比較常見」的方向，並把這個方向編碼成指令格式裡的一個 hint bit
+
+* **優點**：相較於前面幾種「一體適用」的簡單策略，這是針對「每一個分支」各自做預測，如果剖析資料具有代表性，準確率會更高
+* **缺點**：
+  * 需要在分支指令格式裡額外加 hint bit
+  * 準確率高度依賴該分支「動態執行模式」的規律性，例如：
+    * 模式 `TTTTTTTTTTNNNNNNNNNN`（前半全 taken、後半全 not-taken）→ 準確率只有 **50%**
+    * 模式 `TNTNTNTNTNTNTNTNTNTN`（一跳一不跳交替）→ 準確率一樣只有 **50%**
+  * 準確率也高度依賴「剖析時用的輸入資料」跟「實際執行時的資料」有多相似，例如模式 `TTTTTTTTTTTTTTTTTTNN` 若剖析時抓到的多數情況，準確率可以到 **90%**（但如果剖析時剛好抓反，也可能只有 10%）
+---
+
 
 [回目錄](#toc)
 
