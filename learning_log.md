@@ -58,6 +58,7 @@
 | [10/4](#m10d04) | 刷題：複習 HDLBits 7/3 - 9/30 進度|
 | [10/5](#m10d05) | 影片：Digital Design and Computer Architecture(Spring 2025) L14 |
 | [10/6](#m10d06) | 影片：Digital Design and Computer Architecture(Spring 2025) L15 |
+| [10/7](#m10d07) | 影片：Digital Design and Computer Architecture(Spring 2025) L16 |
 
 
 
@@ -10047,10 +10048,10 @@ CPI = 1 + (0.20 * 0.70) * 1 = 1.14
 ---
 
 ### 靜態分支預測細節
-
-#### Always Not-Taken
 <img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/91e10340-0311-4bf1-858d-67dc737ed4b5" />
 
+
+#### Always Not-Taken
 
 * 實作簡單：不需要 BTB，也不需要方向預測邏輯
 * 準確率偏低：約 **30% ~ 40%**（針對條件分支）
@@ -10223,6 +10224,533 @@ CPI = 1 + (0.20 * 0.70) * 1 = 1.14
 * 直接來自 memory/cache 的資料
 
 ---
+
+[回目錄](#toc)
+
+---
+<a id="m10d07"></a>
+
+## 2026 年 10 月 7 日
+
+## 今日進度：
+### 資料：
+1. [Digital Design and Computer Architecture(Spring 2025)](https://safari.ethz.ch/ddca/spring2025/doku.php?id=start)
+2. [Digital Design and Computer Architecture, David Harris and Sarah Harris](https://www.sciencedirect.com/book/9780123704979/digital-design-and-computer-architecture)
+
+### 影片：
+1. [Digital Design and Computer Architecture(Spring 2025) L16](https://www.youtube.com/watch?v=d4SSiWvNnpM&list=PL5Q2soXY2Zi9Eo29LMgKVcaydS7V1zZW3&index=20)
+
+
+## 關鍵知識/詞彙：
+### Static Branch Prediction：
+
+#### (III) Program-based（程式分析啟發式）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/dede65cf-a7e2-4790-b27c-bd6b42dcdac2" />
+
+
+* **想法**：用一些基於程式分析得出的經驗法則（heuristics），靜態地判斷分支方向
+* **常見啟發式範例**：
+  * Opcode 啟發式：把 `BLEZ`（小於等於零跳轉）預測為 **not-taken**（因為很多程式會用負數代表錯誤值）
+  * Loop 啟發式：守衛迴圈執行的分支，預測為 **taken**（也就是預期會進入迴圈執行）
+  * 指標或浮點數比較：預測為 **not equal（不相等）**
+* **優點**：不需要做 profiling
+* **缺點**：啟發式不一定有代表性或準確；仍然需要編譯器分析與 ISA 支援
+* 參考文獻：Ball and Larus, *Branch prediction for free*, PLDI 1993（這套方法的誤判率約 20%）
+
+#### (IV) Programmer-based（程式設計師指定）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/2be63067-4a63-4a62-a2df-a92ce1bebab6" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/59819a11-1ddd-406c-adfe-3ba5e7cb254f" />
+
+
+* **想法**：讓程式設計師自己告訴編譯器某個分支「比較可能」往哪個方向走
+* **做法**：透過程式語言裡的 **pragma（提示關鍵字）**，標註某個分支是 likely-taken 還是 likely-not-taken
+  * 範例：`if (likely(x)) { ... }`、`if (unlikely(error)) { ... }`
+  * Pragma 也能用在其他優化提示上，例如 `#pragma omp parallel` 告訴編譯器這段迴圈可以平行化
+* **優點**：不需要 profiling 或程式分析；程式設計師可能比其他分析技術更了解自己的程式
+* **缺點**：需要程式語言、編譯器、ISA 三方支援；把負擔丟給了程式設計師
+
+#### 所有靜態方法共同的缺點
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d6fb54be-1ba1-498f-ae37-e307019545ce" />
+
+
+* **三種方法（Profile-based / Program-based / Programmer-based）都可以互相結合使用**
+* 但它們有一個共通的根本缺陷：**沒辦法適應分支行為的動態變化**
+  * 可以靠 **Dynamic Compiler（動態編譯器，在執行期才產生程式碼）** 稍微緩解，例如 Java 的 JIT（Just-In-Time）編譯器、Microsoft CLR；但動態編譯器本身也有額外負擔（overhead），而且沒辦法做到很細的粒度
+  * 真實範例：Apple 的 Rosetta 2 二進位轉譯器、NVIDIA Denver 的動態程式碼優化器，都是這類動態最佳化的實際應用
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/561eef04-9c54-4bfc-aef6-fec4f43cc37a" />
+
+---
+
+### Dynamic Branch Prediction（動態分支預測）總覽
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/2a781cb2-8e9e-4209-b9e0-8dcf8fb00431" />
+
+
+* **想法**：根據「執行期間收集到的動態資訊」來預測分支
+* **優點**：
+  * 預測依據是該分支「實際執行的歷史紀錄」，能夠適應分支行為的動態變化
+  * 不需要靜態 profiling，也就不用擔心 profiling 用的輸入資料跟實際執行資料不具代表性的問題
+* **缺點**：
+  * 更複雜，需要額外的硬體支援
+* **靜態**預測是「**不管歷史，按死板規則盲猜**」；**動態**預測則是「**根據過往戰績，動態調整策略來聰明地猜**」。
+
+---
+
+### Last-Time Predictor（上一次預測器）
+
+#### 核心想法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f68e6dfb-9100-49ed-8796-c498f2d5448f" />
+
+* 猜這次分支會跟它「上一次執行」走同一個方向
+* 用每個分支 **1 個 bit**（存在 BTB 裡）記錄上次走的方向
+
+#### 準確率分析
+
+* 會在**迴圈的第一次迭代跟最後一次迭代都猜錯**
+* 對一個跑 N 次迭代的迴圈，準確率 = `(N-2)/N`
+* **優點**：迭代次數 N 很大的迴圈，準確率趨近 100%
+* **缺點**：迭代次數很小、或方向本來就一跳一不跳交替（`TNTNTN...`）的分支，準確率可能掉到 **0%**
+
+#### 實作方式
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c1bc3939-2ce1-4e49-81ba-bde7f59895a9" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f5576599-9c07-4173-a4aa-b65a97b21cca" />
+
+
+* 用 **BHT（Branch History Table）**：每個 entry 只有 1 個 bit，記錄「上次走的方向」
+* 查詢時用 PC（經過 tag/index 處理）去查 BHT，拿到的 bit 就是這次的預測方向
+* 每次分支真正執行完之後，用真正的結果去更新 BHT 裡對應的那個 bit
+
+#### 狀態機
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/5dcda0f6-aa3c-4bf2-98e5-65791a09e419" />
+
+
+* 兩個狀態：`predict not taken` 與 `predict taken`
+* 只要分支這次的結果跟預測不符，狀態就會立刻切換到另一邊（這正是它準確率不夠穩定的根本原因）
+
+---
+
+### 改良：Two-Bit Counter（兩位元計數器，又稱 Bimodal Prediction）
+
+#### 動機
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f14366d2-acbe-4f30-8665-a84d0bc80dfa" />
+
+
+* Last-time predictor 的問題：**只要出現一次不同的結果，預測方向就會馬上翻轉**，即使這個分支其實「大部分時候」都維持同一個方向
+* **解法**：加入遲滯（hysteresis）機制，不要因為單一一次不同的結果就改變預測
+
+#### 做法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/9b3af3e7-f81e-4ef4-83ca-554cafaee515" />
+
+
+* 每個分支用 **2 個 bit** 來追蹤歷史，而不是只用 1 個 bit
+* 等於 taken 跟 not-taken 各自細分成「strongly」跟「weakly」兩種狀態，共 4 種狀態
+* 用飽和計數器（saturating counter）的方式運作：數值有上限跟下限
+
+#### 狀態機細節
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4ec872cc-6196-49ae-8c2c-19c050b5dcac" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/69c33115-c3b3-4e02-aedd-d642c3818769" />
+
+
+四個狀態：`11（strongly taken）→ 10（weakly taken）→ 01（weakly not-taken）→ 00（strongly not-taken）`
+
+* 只有連續 **兩次** 跟預測不符，才會真正把「強預測」改變方向（也就是要先從 strongly 退到 weakly，再出錯一次才會真正翻轉）
+
+#### 準確率
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/37df6653-7d34-48a0-8506-518c35e485b5" />
+
+
+* 對一個跑 N 次迭代的迴圈，準確率提升到 `(N-1)/N`（比 last-time predictor 的 `(N-2)/N` 好一點）
+* 範例：`TTTTTTTTTTTTTTTTTTTN` → 準確率約 95%；`TNTNTNTNTNTNTNTNTNTN`（交替模式）→ 準確率仍然只有約 50%（假設計數器初始化為 weakly taken）
+
+#### 優缺點
+
+* **優點**：準確率比 last-time predictor 更好
+* **缺點**：硬體成本較高（但這個計數器可以直接做成 BTB entry 的一部分）
+
+#### 這樣夠好了嗎？
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e702ba1f-bbce-4bfe-b8af-8f2a62cd3adb" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/35670357-4c3a-4439-ac4f-2c50fc3a4d11" />
+
+
+* 2-bit counter（bimodal prediction）在許多程式上大約可以做到 **85% ~ 90%** 的準確率
+* 重新代入 Lecture 15b 的公式，算出在 85%、80% 準確率下，fetch 500 條指令分別要花 400、500 個 cycle（相較 100% 準確率的 100 cycle，代價依然相當可觀）——**說明光靠 2-bit counter 還不夠，需要更聰明的預測器**
+
+---
+
+### 更進一步：Two-Level Prediction（兩層式預測）
+
+#### 動機：兩個「發現」
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a60ade8b-e326-48c3-9309-05cca2bf9029" />
+
+
+Last-time predictor 跟 2-bit counter 都只利用了「這個分支自己上一次（或最近幾次）」的歷史。還有兩個更深層的相關性可以利用：
+
+1. **發現一（Global branch correlation，全域分支相關性）**：一個分支的結果，可能跟「其他分支」的結果有關連
+2. **發現二（Local branch correlation，區域分支相關性）**：一個分支的結果，可能跟「自己過去更久以前」的歷史有關連（不只是「上一次」）
+
+> 參考文獻：Yeh and Patt, *Two-Level Adaptive Training Branch Prediction*, MICRO 1991
+
+---
+
+### Global Branch Correlation（全域分支相關性）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e23dc428-e85c-47b5-8341-f631e7d5344c" />
+
+* 執行路徑上「最近執行過的那些分支」的結果，會跟「下一個分支」的結果產生關聯
+* 範例邏輯：如果前一個分支 not-taken，下一個也 not-taken；如果前一個 taken，下一個一定 not-taken（取決於實際程式邏輯）
+* 更具體的例子（三個分支 X, Y, Z）：如果 Y 跟 Z 都 taken，則 X 也 taken；如果 Y 或 Z 任一個 not-taken，則 X 也 not-taken
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/9d5b962d-6f37-4892-83ba-1bab5776f03a" />
+
+
+#### 真實程式範例（Eqntott, SPEC'92 workload）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/ed6792fa-cf68-4352-b5af-ac280f4f0838" />
+
+
+```c
+if (aa == 2)        // B1
+    aa = 0;
+if (bb == 2)         // B2
+    bb = 0;
+if (aa != bb) {       // B3
+    ...
+}
+```
+
+* 如果 `B1` taken（代表到 `B3` 時 `aa == 0`）、`B2` 也 taken（代表 `bb == 0`），那麼 `B3` 一定是 **not-taken**（因為 `aa == bb == 0`）
+* 這個例子具體展示了「前面分支的結果」如何直接決定「後面分支」的結果
+
+#### 怎麼實際捕捉這個相關性
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/87f88965-4a66-40ed-a3b5-c06be3036f0b" />
+
+
+* **想法**：把每個分支的結果，跟「全部分支的全域 T/NT 歷史」綁在一起，根據「上次遇到同樣的全域歷史時，這個分支走的方向」來做預測
+* **實作方式**：
+  * **Global History Register（GHR）**：一個暫存器，追蹤最近 N 次分支的 taken/not-taken 結果
+  * **Pattern History Table（PHT）**：用 GHR 的值去索引的一張表，表裡存的是「上次遇到這個 GHR 值時，分支真正走的方向」（用 2-bit counter 實作）
+* 這就是所謂的 **Global History/Branch Predictor**，用了兩層歷史：第一層是 GHR 本身，第二層是「在那個 GHR 值底下」記錄的結果
+
+#### Two-Level Global Branch Prediction 的具體結構
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a89e7edb-6da9-4470-ac5c-2289602b0171" />
+
+
+* **第一層**：N-bit 的全域分支歷史暫存器（Global Branch History Register），記錄最近 N 個分支的方向
+* **第二層**：一張飽和計數器表（PHT），用第一層的歷史值當索引，取得「上次遇到這個歷史值時，該分支走的方向」
+
+#### 真實案例：Intel Pentium Pro 的分支預測器
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/85750eb6-3bcb-4e2a-9607-abe04462636e" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/5bcd7b1f-6c19-4694-9810-b56a5ace829d" />
+
+
+* 採用 Two-Level Global Branch Predictor
+* 用 4-bit 的 Global History Register
+* 有多張 Pattern History Table（都是 2-bit counter），**用分支位址的低位元來決定該用哪一張 PHT**
+* **Pentium Pro 是業界第一台廣受商業成功的 Out-of-order 執行機器**：結合了 Out-of-order + Superscalar + 兩層式分支預測 + 用 ROB 支援的 Precise Exceptions
+
+#### 進一步改良：Gshare Predictor
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/326f5660-a4f0-41c6-9fbe-fa51fe51e90b" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/9a4a9223-acae-4ea7-ad3e-1e70da4e3109" />
+
+
+* **想法**：在索引 PHT 之前，把 GHR 的值跟分支的 PC 先做 **XOR**，藉此加入「這是哪一個分支」的額外上下文資訊
+* **優點**：讓 PHT 的利用率更好、能同時考慮歷史與分支本身的差異
+* **缺點**：增加存取延遲
+* 參考文獻：McFarling, *Combining Branch Predictors*, DEC WRL Tech Report, 1993
+
+---
+
+### Local Branch Correlation（區域分支相關性）
+
+#### 動機
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/679aeb82-5c79-477e-9f78-81bbc76166f7" />
+
+
+* 想要「完美」地預測一個迴圈分支，關鍵在於**準確抓出迴圈的最後一次迭代**（因為那一次的結果會跟其他迭代不一樣）
+* 如果能針對「每一種不同的區域歷史模式」各自維護一個獨立的 PHT entry，就能分辨出「現在是迴圈的第幾次迭代」——這招對「短」迴圈特別有效
+
+#### 怎麼實際捕捉這個相關性
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a5b78a03-ab72-43bf-adfe-f6679cad7537" />
+
+
+* **想法**：每個分支各自維護一份「屬於自己」的歷史暫存器（而不是像 global 那樣全部分支共用一份）
+* 根據「上次遇到同樣的區域歷史時，這個分支走的方向」來做預測
+* 稱為 **Local History/Branch Predictor**，一樣是兩層：第一層是每個分支各自的歷史暫存器，第二層是「在那個區域歷史值底下」記錄的結果
+
+#### Two-Level Local Branch Prediction 的具體結構
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/24f6b776-e661-4d7a-bd96-93d45e79a0af" />
+
+
+* **第一層**：一組 Local History Register（每個 N bits），依分支的 PC 選擇要用哪一個區域歷史暫存器
+* **第二層**：跟 global 版本一樣，用這個區域歷史值去索引一張飽和計數器表（PHT）
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c92c774b-8c1b-43c1-8190-965c4771ec76" />
+
+
+---
+
+### 補充：Two-Level Predictor 的分類法（Taxonomy）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/37925d22-2d3b-46f7-8f5c-aeef4801874d" />
+
+
+Two-level predictor 可以用三個維度來分類：
+
+* **BHR（Branch History Register）** 可以是：Global（G，全部分支共用）、per-Set（S，一群分支共用）、per-branch（P，每個分支各自獨立）
+* **PHT 裡的計數器** 可以是：Adaptive（A，會動態更新）或 Static（S，固定不變）
+* **PHT 本身** 可以是：Global（g）、per-Set（s）、per-branch（p）
+
+> 這代表了一整個設計空間，前面介紹的 global predictor 跟 local predictor，其實只是這個設計空間裡的兩個特例。
+
+---
+
+### Hybrid Branch Predictor（混合式分支預測器）
+
+#### 動機
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/77751841-da62-4321-8b49-4ca8d06d30d5" />
+
+
+* 不同分支的「可預測性」本質上就不一樣：
+  * 有些分支用 local history 預測比較準
+  * 有些分支用 global history 預測比較準
+  * 有些分支只需要簡單的 2-bit counter 就夠了
+  * 甚至有些分支只需要 1 個 bit 就夠了
+* **結論**：分支的可預測行為存在異質性（heterogeneity），沒有一套演算法可以通吃所有分支
+
+#### 做法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c34ed298-d26b-4416-97e8-b40d2f76043d" />
+
+
+* 同時使用多種預測演算法，再挑選「最好」的那個預測結果
+* 例如：結合 2-bit counter 跟 global predictor
+
+#### 優缺點
+
+**優點**
+
+* 準確率更好：不同預測器各自擅長不同的分支
+* 減少熱身時間（warmup time）：先用「熱身快」的預測器頂著用，等「熱身慢但更準」的預測器真正熱身完成後再切換過去
+
+**缺點**
+
+* 需要額外的「meta-predictor」或「selector（選擇器）」來決定該用哪個預測器的結果
+* 存取延遲更長
+* 更多硬體與複雜度
+
+> 參考文獻：McFarling, *Combining Branch Predictors*, DEC WRL Tech Report, 1993
+
+#### 真實案例：Alpha 21264 的 Tournament Predictor
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/2b420f1f-00a9-4c3b-9a51-6868d572ee7d" />
+
+
+* 最小分支懲罰：7 cycles；一般典型分支懲罰：11+ cycles
+* I-cache 裡存了 48K bits 的目標位址
+* 預測器表格在 context switch（切換行程）時會被重置
+
+---
+
+### 補充議題：Biased Branches 與 Branch Filtering
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4255b33c-00e5-484e-b0e3-7c3b25798215" />
+
+
+* **觀察**：很多分支其實是「偏向某一邊」的（例如 99% 的時候都是 taken）
+* **問題**：這些偏向型分支會「污染」分支預測結構——它們會在分支預測表跟歷史暫存器裡造成「干擾（interference）」，反而讓其他分支變得更難預測
+* **解法**：偵測出這些偏向型分支，改用更簡單的預測器來處理它們（例如 last-time predictor 或靜態預測），把複雜、昂貴的預測資源留給真正需要的分支
+* 參考文獻：Chang et al., *Branch classification: a new mechanism for improving branch predictor performance*, MICRO 1994
+
+---
+
+### 分支預測做到這樣，夠了嗎？
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/476fdc48-10fd-4f37-9f06-218b886e5816" />
+
+
+* Hybrid branch predictor 普遍能做到 **90% ~ 97%** 的平均預測準確率
+* 但有些「困難」的 workload 仍然表現很差：
+  * 例如 `gcc`：用 tournament prediction 最高只能做到 IPC = 9，但如果有完美預測，理論上可以做到 IPC = 35
+  * **差距非常巨大**，說明分支預測仍然有很大的進步空間
+
+---
+
+### 其他類型的分支預測器
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/07c9f86a-9076-4b00-92ad-5fb9466f85f0" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/48f5e378-3521-4dd8-af87-f1501d2acac2" />
+
+
+* **Loop Branch Detector/Predictor（迴圈分支偵測/預測器）**
+  * 偵測並預測迴圈的迭代次數
+  * 對迭代次數少、且次數本身具有可預測性的迴圈效果很好
+  * 實際用在 Intel Pentium M 裡（搭配 Jump Predictor）
+* **Perceptron Branch Predictor（感知器分支預測器）**
+  * 學習「各個分支之間」的方向相關性
+  * 用簡單的機器學習方式，給每個相關性分配一個權重
+  * 參考文獻：Jimenez and Lin, *Dynamic Branch Prediction with Perceptrons*, HPCA 2001
+* **Hybrid History-Length Based Predictor（混合歷史長度預測器，即 TAGE 系列）**
+  * 用多張、各自使用不同歷史長度的表
+  * 參考文獻：Seznec, *Analysis of the O-Geometric History Length Branch Predictor*, ISCA 2005
+
+---
+
+### Perceptron Branch Predictor 細節
+
+#### 背景概念：什麼是 Perceptron（感知器）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/77c1d19c-8e79-4e79-90be-1f8f0ec1f219" />
+
+
+* 感知器是生物神經元的簡化模型，也是一種簡單的二元分類器
+* 把輸入向量 `X` 映射成 0 或 1 的輸出
+* 感知器會學習一個線性函數：每個輸入元素如何影響輸出（這些「如何影響」的程度存放在內部的權重向量 `Weight` 裡）
+* 輸出規則：`Weight . X + Bias > 0`
+
+#### 套用到分支預測的情境
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/16b2c1ff-b08f-41fc-a04a-36fe01ce4b4a" />
+
+
+* 輸入向量 `X`：分支歷史暫存器（GHR）裡的每一個 bit
+* 輸出：對目前這個分支的預測結果
+
+#### 運作細節
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8d77c7fd-92cf-4c6e-a208-19c550084478" />
+
+
+* 每個分支各自對應一個 perceptron
+* Perceptron 內部有一組權重 `wi`，每個權重對應 GHR 裡的一個 bit
+  * 權重代表「這個歷史 bit」跟「這個分支方向」的相關程度
+  * 正相關 → 很大的正權重；負相關 → 很大的負權重
+* **預測方式**：
+  * 把 GHR 的每個 bit 表示成 `1`（代表 taken）或 `-1`（代表 not-taken）
+  * 計算 GHR 向量跟權重向量的「內積（dot product）」，再加上一個獨立於歷史的 bias 權重（代表這個分支本身的偏向）
+  * 如果內積結果大於 0，就預測 taken
+* **訓練方式**：根據真正的分支結果，去調整內部的權重，讓下次預測更準
+
+#### 優缺點
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/b929ea57-77f9-4a9a-8bbe-737334ca5d3c" />
+
+
+**優點**
+
+* 更精巧的學習機制，準確率更高
+* 能夠支援比較長的分支歷史長度，進一步提升準確率
+
+**缺點**
+
+* 複雜度較高（需要加法樹來計算 perceptron 的輸出）
+* **只能學習線性可分（linearly-separable）的函數**：例如沒辦法學會「兩個歷史 bit 之間的 XOR 型相關性」這種非線性關係
+
+> Perceptron 是機器學習成功應用在處理器設計上的一個代表性案例，實際用在 AMD Piledriver / Zen / Zen2 等處理器裡。
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/261fc176-132d-4c4b-a31e-b7ce05ebd792" />
+
+
+---
+
+### TAGE Branch Predictor（另一個進階方向）
+
+#### 核心想法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8d29d599-dab1-45b5-88a5-af5b806f327f" />
+
+
+* **觀察**：不同的分支，需要「不同長度」的歷史才能被準確預測
+* **想法**：準備多張 PHT，分別用「不同歷史長度」的 GHR 去索引，再智慧地把不同的 PHT entry 分配給不同的分支使用
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4dcfc0d5-86ae-4d87-ad4f-3f1e884466ab" />
+
+
+#### 優缺點
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/ed82eeda-1f19-4b93-9cfc-64461df48768" />
+
+
+**優點**
+
+* 能針對每個分支選擇「最適合」的歷史長度，準確率更好
+* 能支援很長的分支歷史長度，進一步提升準確率
+
+**缺點**
+
+* 硬體（設計）複雜度不低
+* 需要精心挑選 hash 函數與表格大小，才能同時兼顧準確率與存取延遲
+
+> TAGE 是近年來相當成功、被許多現代處理器實際採用的設計方向。
+
+#### 真實案例：AMD Zen2 的多層式分支預測器
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c329b1b8-0f1a-4e1d-979e-01316b514e78" />
+
+
+* 採用「Perceptron（第一層）+ TAGE（第二層）」的多層式分支預測架構
+
+---
+
+### 補充：全域分支相關性的實際研究結果
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/3b333377-e536-4caa-a5b8-81dcd3466463" />
+
+
+* 針對「X 是否相關於 Y、Z 這兩個先前分支」的研究發現：**實際上往往只有最近的 3 個分支方向，才真正對預測有顯著幫助**
+* 參考文獻：Evers et al., *An Analysis of Correlation and Predictability: What Makes Two-Level Branch Predictors Work*, ISCA 1998
+
+---
+
+### 分支預測的最新發展（State of the Art）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4d55b605-44ae-44d1-b1b8-0de8067d8e44" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/387c9baa-a74f-4064-b578-60db940ddbef" />
+
+
+* 這是一個仍在積極研究中的領域，有專門的 **Branch Prediction Championship（CBP）** 競賽持續在尋找更準確的預測演算法
+* 目前的業界標竿是 **TAGE-SC-L**（Seznec, CBP 2014）
+* **近期研究方向**：用卷積神經網路（Convolutional Neural Network）處理「難以預測」的分支
+  * 動機：要在「很長、很雜訊」的全域歷史裡找出隱藏的相關性很困難
+  * **BranchNet**：CNN 預測器專門處理難預測的分支，搭配 TAGE-SC-L 處理其餘的一般分支（Zangeneh et al., MICRO 2020）
+
+---
+
+### Branch Confidence Estimation（分支預測信心度估計）
+
+#### 核心想法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/749a9290-1352-41c1-9aed-e900dfeb3113" />
+
+
+* 不只是做出預測，還要**估計這次的預測有多大機會是正確的（信心度）**
+
+#### 為什麼需要信心度？
+
+可以用來決定該怎麼做投機（speculation），例如：
+
+* 該選用哪一個 predictor / PHT / table
+* 要不要繼續沿著目前猜測的路徑 fetch 下去
+* 要不要改用別的方式處理這條分支，例如切換成 **Dual-path Execution（雙路徑投機執行）** 或 **Predicated Execution（條件式執行）**
+
+#### 怎麼估計信心度
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4e6ccd47-0483-432e-84eb-823a446fe9b1" />
+
+
+* 範例做法：記錄這個分支過去 N 次「預測對/錯」的紀錄，根據這個對/錯模式，去猜這一次的預測大概會不會準
+
+#### 信心度估計的實際應用：Pipeline Gating
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/ec72fa3d-fb42-473a-93dc-a902ebedfdfb" />
+
+
+* 如果信心度很低（代表很可能猜錯），可以選擇性地「關閉」繼續投機 fetch 的動作，藉此省下白做工的能源消耗
+* 參考文獻：Manne et al., *Pipeline Gating: Speculation Control for Energy Reduction*, ISCA 1998
+
+---
+
+### 分支預測研究還沒結束
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/2a8fc9dd-8d57-4a6c-a5f2-a8e7f03492e7" />
+
+
+* 這個領域目前仍然有研究社群持續在努力：持續尋找比目前最先進方案誤判率更低的分支方向預測器
+* 投影片附上 2025 年 CBP 競賽資訊（提交截止日 2025 年 5 月 2 日），代表這是一個至今（也就是這堂課開課的當下）仍然活躍的研究主題
+
+---
+
+### 回到大架構：分支處理的六種方法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/42913580-bd47-4486-9984-bca7048b2a7b" />
+
+
+課程最後把視角拉回到最初列出的六種處理控制相依的方法：
+
+1. Stall（停頓）
+2. **Branch Prediction（分支預測）**——這兩堂課的重點主題，已完整涵蓋
+3. Delayed Branching（延遲分支）
+4. Fine-grained Multithreading（細粒度多執行緒）
+5. Predicated Execution（條件式執行）
+6. Multipath Execution（多路徑執行）
+
+---
+
 
 [回目錄](#toc)
 
