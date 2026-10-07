@@ -10430,6 +10430,7 @@ if (aa != bb) {       // B3
 * **實作方式**：
   * **Global History Register（GHR）**：一個暫存器，追蹤最近 N 次分支的 taken/not-taken 結果
   * **Pattern History Table（PHT）**：用 GHR 的值去索引的一張表，表裡存的是「上次遇到這個 GHR 值時，分支真正走的方向」（用 2-bit counter 實作）
+  * GHR 負責追蹤並提供近期的歷史數據；PHT 則利用這份數據去索引出該情境下的「預測方向」。
 * 這就是所謂的 **Global History/Branch Predictor**，用了兩層歷史：第一層是 GHR 本身，第二層是「在那個 GHR 值底下」記錄的結果
 
 #### Two-Level Global Branch Prediction 的具體結構
