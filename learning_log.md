@@ -10080,7 +10080,149 @@ CPI = 1 + (0.20 * 0.70) * 1 = 1.14
     * 模式 `TNTNTNTNTNTNTNTNTNTN`（一跳一不跳交替）→ 準確率一樣只有 **50%**
   * 準確率也高度依賴「剖析時用的輸入資料」跟「實際執行時的資料」有多相似，例如模式 `TTTTTTTTTTTTTTTTTTNN` 若剖析時抓到的多數情況，準確率可以到 **90%**（但如果剖析時剛好抓反，也可能只有 10%）
 ---
+### Register 跟 Memory 的根本差異
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7d939e1e-44a9-400d-af25-b82516d7bec6" />
 
+
+| 比較項目 | Register | Memory |
+|---|---|---|
+| 相依關係何時確定 | 靜態就能知道（編譯時期／解碼時就看得出來是哪個暫存器） | 動態才能確定（要等 Load/Store 指令真正算出位址才知道） |
+| 狀態大小 | 小（只有幾十個暫存器） | 大（整個記憶體空間） |
+| 可見範圍 | 對其他 thread/processor 不可見 | 在共享記憶體多處理器系統裡，是多個 thread/processor 共用的狀態 |
+
+> 正因為這些差異，記憶體的相依性處理，沒辦法直接套用暫存器那套 Register Renaming 的做法。
+
+---
+
+### Memory Dependence Handling 的核心困難
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/3e3e1714-e544-41cb-bf16-bd43b045af78" />
+
+
+* **觀察與問題**：一條 Load/Store 指令的記憶體位址，要等到它真正執行（或至少算出位址）才會知道
+* **推論 1**：記憶體位址很難像暫存器一樣做 renaming（因為 renaming 需要事先知道「這是哪個位置」）
+* **推論 2**：要判斷兩條 load/store 指令是否存在相依關係，必須等到它們（至少部分）執行完、算出位址之後才能確定
+* **推論 3**：當某條 load/store 的位址已經準備好時，系統裡可能還存在著「位址尚未知道」的、比它更舊或更新的其他 load/store 指令
+
+---
+
+### 什麼時候可以排程（schedule）一條 Load 指令？
+
+
+* **問題核心**：一條比較新（younger）的 load，它的位址可能比一條比較舊（older）的 store 還要早準備好
+* 這個問題有個專門的名字：**Memory Disambiguation Problem（記憶體消歧問題）**，也叫 **Unknown Address Problem（未知位址問題）**
+
+#### 三種處理策略
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4d63bb91-7ecf-482e-b42e-e7424c4cd197" />
+
+
+1. **保守（Conservative）**：讓這條 load 停住，等到前面所有 store 都算出位址（甚至等到它們都 retire）才執行
+2. **激進（Aggressive）**：直接假設這條 load 跟那些「位址未知的 store」沒有相依關係，立刻排程執行
+3. **智慧型（Intelligent）**：用一個比較精巧的預測器，去預測這條 load 到底是否相依於某個位址還未知的 store
+
+---
+
+### 怎麼偵測 Store-Load 之間的相依關係
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/da801127-520b-407a-b435-8034d4abaee9" />
+
+
+一條 load 的「是否相依」狀態，要等到前面所有 store 的位址都確定了才能真正知道。硬體有以下幾種做法：
+
+#### 偵測相依性的方式
+
+* **選項一**：乾脆等到前面所有 store 都 commit 完畢（這樣就完全不需要比對位址）
+* **選項二**：維護一份「尚未提交的 store 清單」（store buffer），檢查這條 load 的位址是否跟清單裡任何一個 store 的位址相符
+
+#### 決定如何排程 Load 的方式
+
+* **選項一**：假設這條 load 相依於前面所有的 store（最保守）
+* **選項二**：假設這條 load 跟前面所有 store 都無關（最激進）
+* **選項三**：用預測器去預測這條 load 是否相依於某個尚未完成的 store
+
+---
+
+### Memory Disambiguation：三種做法的優缺點比較
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e72767e2-414e-4223-9536-7189d69b59ae" />
+
+
+| 做法 | 優點 | 缺點 |
+|---|---|---|
+| **選項一：假設 load 相依於所有前面的 store** | 不需要任何復原機制（recovery） | 太保守，會不必要地延遲掉那些其實彼此無關的 load |
+| **選項二：假設 load 跟所有前面的 store 都無關** | 做法簡單，而且通常這就是最常見的實際情況，無關的 load 完全不會被延遲 | 一旦猜錯，需要復原（recovery）並重新執行這條 load 以及依賴它的後續指令 |
+| **選項三：預測 load 是否相依於某個尚未完成的 store** | 準確度較高，因為 store-load 的相依關係通常會隨著時間持續存在（同一組指令反覆執行時，相依模式通常一致） | 猜錯時一樣需要復原／重新執行 |
+
+#### 真實案例
+
+* **Alpha 21264**：一開始先假設 load 是獨立的，之後若發現某條 load 其實跟某個 store 相依，就讓它延遲
+* 參考文獻：
+  * Moshovos et al., *Dynamic speculation and synchronization of data dependences*, ISCA 1997
+  * Chrysos and Emer, *Memory Dependence Prediction Using Store Sets*, ISCA 1998
+
+#### Store Sets 論文的實驗結果（Chrysos and Emer, ISCA 1998）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d5a66a63-3554-4576-a813-625b3fb9476e" />
+
+
+用多個 benchmark（如 applu、gcc、ijpeg、mgrid、vortex 等）比較三種設定下的 IPC：
+
+* `no speculation`（完全不投機，等於保守做法）：IPC 最低
+* `naive speculation`（單純投機，不做預測）：IPC 普遍比不投機好一些
+* `perfect`（完美預測，上限值）：IPC 明顯比前兩者高出許多，部分 benchmark（如 fpppp、mgrid、turb3d）差距特別大
+
+**結論**：
+
+* 預測 store-load 相依關係對效能影響很大
+* 即使只是簡單的（based on past history）預測器，也能拿到大部分潛在的效能提升——不需要完美預測器才有感
+
+---
+
+### Store 跟 Load 之間怎麼做資料轉送（Data Forwarding）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d341a5c9-25e9-4da1-8329-35b445564491" />
+
+
+* **前提限制**：記憶體不能被「亂序更新」（不能讓 store 依照完成順序去寫記憶體，否則會破壞程式語意）→ 所有 store 跟 load 指令都必須先緩衝在 instruction window 裡
+* 即使已經知道所有前面 store 的位址，仍然有兩個問題要解決：
+  1. 怎麼判斷這條 load 究竟是否相依於某個 store？
+  2. 如果相依，要怎麼把資料轉送（forward）給這條 load？
+
+#### 現代處理器的解法：LQ（Load Queue）與 SQ（Store Queue）
+
+* 現代處理器用專門的 **Load Queue（LQ）** 跟 **Store Queue（SQ）** 來處理這件事（可以是合併在一起，也可以是 load 跟 store 各自獨立）
+* **一條 load 算出位址後，會去搜尋 SQ**：目的是檢查有沒有更舊的 store 寫過同一個位址，如果有，就直接把資料從 SQ 轉送過來，不用等它真正寫進記憶體
+* **一條 store 算出位址後，也會去搜尋 LQ**：目的是檢查有沒有已經「搶先讀到舊值」的 load（也就是在這條 store 之前就該讀到這個新值，但卻搶先執行、讀到了舊的錯誤值），一旦發現這種情況，就必須觸發復原機制
+
+---
+
+### 記憶體操作的 Out-of-Order 完成機制
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/09422a59-87c1-415d-a7b7-20a592c871ab" />
+
+
+* 當一條 **store** 指令完成執行時，把它的位址跟資料寫進自己的 ROB entry（或 SQ entry）
+* 當一條之後的 **load** 指令算出自己的位址時：
+  1. 用這個位址去搜尋 SQ
+  2. 同時用這個位址去存取記憶體（memory/cache）
+  3. 最終從「所有寫過這個位址、且比自己舊的指令裡，最年輕（最接近自己）的那一個」拿到正確的值——這個值可能來自 ROB（還沒真正寫進記憶體的 store），也可能直接來自 memory
+
+* 這整套「搜尋邏輯」相當複雜，是用 **CAM（Content Addressable Memory，內容定址記憶體）** 實作的
+  * 這裡的「內容」指的是「記憶體位址」，但實際上還需要同時考慮資料大小（size）與指令的新舊順序（age）
+  * 這整套機制叫做 **Store-to-Load Forwarding Logic（儲存轉載入的轉送邏輯）**
+
+---
+
+### Store-Load Forwarding 的複雜度來源
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/f6029111-1afb-41fe-891a-804692510bf7" />
+
+
+這套轉送邏輯之所以複雜，是因為它同時牽涉到好幾種搜尋方式：
+
+* **內容定址搜尋（Content Addressable Search）**：依據 load 的位址去搜尋
+* **範圍搜尋（Range Search）**：同時考慮 load 跟先前 store 各自的「位址＋資料大小」，因為兩者存取的範圍可能部分重疊而非完全相同
+* **依新舊順序搜尋（Age-Based Search）**：為了找到「最後一次寫入」這個位址的指令，必須同時考慮指令的新舊順序
+
+而且，一條 load 最終拿到的資料，可能是**由好幾個不同來源組合而成**：
+
+* Store Buffer（SQ）裡一條或多條 store 的資料
+* 直接來自 memory/cache 的資料
+
+---
 
 [回目錄](#toc)
 
