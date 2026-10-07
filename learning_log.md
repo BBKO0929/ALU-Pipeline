@@ -10319,6 +10319,9 @@ CPI = 1 + (0.20 * 0.70) * 1 = 1.14
 
 * 用 **BHT（Branch History Table）**：每個 entry 只有 1 個 bit，記錄「上次走的方向」
 * 查詢時用 PC（經過 tag/index 處理）去查 BHT，拿到的 bit 就是這次的預測方向
+  * 硬體在 Fetch 階段拿當前的 PC 位址去查表，就能一口氣檢索出兩個關鍵資訊：
+  	* 方向預測（Taken / Not Taken）：從 BHT 讀出歷史紀錄，決定這次要不要跳轉。
+    * 目標位址（Target Address）：從 BTB 讀出如果跳轉的話，下一個 PC 應該換成什麼位址。   
 * 每次分支真正執行完之後，用真正的結果去更新 BHT 裡對應的那個 bit
 
 #### 狀態機
