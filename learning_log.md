@@ -10486,6 +10486,7 @@ if (aa != bb) {       // B3
 
 * **第一層**：一組 Local History Register（每個 N bits），依分支的 PC 選擇要用哪一個區域歷史暫存器
 * **第二層**：跟 global 版本一樣，用這個區域歷史值去索引一張飽和計數器表（PHT）
+* 「不同的迴圈模式/階段」在硬體中就是透過被拆分成「PHT 表格中獨立的 Entry（格子）」來各自獨立預測與學習（不同的迴圈模式會個別在獨立一個區塊內，分別去做預測）
 
 <img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c92c774b-8c1b-43c1-8190-965c4771ec76" />
 
