@@ -16,7 +16,7 @@
 | [8/4](#m08d04) | 完成 Testbench - alu_v2_tt，驗證 pipeline 版本功能，經多輪除錯後全數 PASS |
 | [8/5](#m08d05) | 32bit_ALU_V2（pipeline） - 第一次 Synthesis + Implementation 結果，並記錄收斂到 WNS 接近 0 的結果 |
 | [8/11](#m08d11) | 32bit_ALU_V2（pipeline） - 主動重構，把邏輯運算與 SLT 先獨立拆成一個組合邏輯 ，Stage1 暫存器改成**每拍無條件更新** |
-| [8/17](#m08d17) | 32bit_ALU_V2（pipeline） - 主動重構優化 Stage1 暫存器位元寬度精簡、SLT 共用加減法器硬體 |
+| [8/17](#m08d17) | 32bit_ALU_V2（pipeline） - 主動重構，優化 Stage1 暫存器位元寬度精簡、SLT 共用加減法器硬體 |
 
 ---
 
