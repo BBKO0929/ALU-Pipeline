@@ -17,7 +17,7 @@
 | [8/5](#m08d05) | 32bit_ALU_V2（pipeline） - 第一次 Synthesis + Implementation 結果，並記錄收斂到 WNS 接近 0 的結果 |
 | [8/11](#m08d11) | 32bit_ALU_V2（pipeline） - 主動重構，把邏輯運算與 SLT 先獨立拆成一個組合邏輯 ，Stage1 暫存器改成**每拍無條件更新** |
 | [8/17](#m08d17) | 32bit_ALU_V2（pipeline） - 主動重構，優化 Stage1 暫存器位元寬度精簡、SLT 共用加減法器硬體 |
-| [10/11](#m10d11) | 將 alu_v2 建立完整輸入 -> 輸出 路徑，並把 alu_v1、alu_v2 收斂到 WNS 最接近 0 的結果 |
+| [10/11](#m10d11) | 建立較完整的 ALU_V2 timing 測試環境，並重新將 ALU_V1 與 ALU_V2 的 clock period 逐步壓低，直到 WNS 收斂至最接近 0 |
 
 ---
 
@@ -1430,7 +1430,7 @@ endmodule
 
 
 ## 今日成果探討：
-### ALU 設計：
+### ALU 設計：本次主要目標是重新建立較完整的 ALU_V2 timing 測試環境，並重新將 ALU_V1 與 ALU_V2 的 clock period 逐步壓低，直到 WNS 收斂至接近 0，以取得兩個版本在目前實作條件下的實際時序極限。
 ### 32bit_ALU_V1（baseline） - 收斂到 WNS 最接近 0 的結果
 * Constraints sources 
 ```
@@ -1451,7 +1451,9 @@ create_clock -period 6.3 -name clk [get_ports clk]
 
 ---
 ### 32bit_ALU_V2（pipeline）
-#### 1. 發現舊版缺少輸入約束，完整的［輸入->輸出］沒被量到，所以建立 alu_v2_wrapper ［輸入暫存器 → Stage 1 邏輯 → Stage 1 暫存器］路徑
+#### 1. 本次針對先前 V2 缺少完整輸入端 wrapper 的問題進行補強，建立 `alu_v2_wrapper`，加入輸入暫存器，使測試架構至少包含：
+* `外部輸入 → Input Register → Stage 1 → Stage 1 Register → Stage 2 → Output Register`
+
 * 程式碼
   ```verilog
   	module alu_v2_wrapper(
@@ -1523,11 +1525,76 @@ create_clock -period 3.65 -name clk [get_ports clk]
 | Latency | 1 cycle | 2 cycle |
 
 ### 說明
+在目前的實作結果下，ALU_V2 的最大可運作頻率約為 279.72 MHz，相較於 ALU_V1 的約 160.35 MHz，提升約 74.5%。
+這也再次驗證 Pipeline 將原本較長的組合邏輯路徑切成多個 timing stage 後，可以有效降低單一 clock cycle 所需要承受的 combinational delay，換取更高的 operating frequency；代價則是增加 FF 使用量以及多 1 cycle 的 latency。
 
+#### 本次結果的限制
+
+需要注意的是，目前 V2 的 XDC 仍主要只有 `create_clock`，尚未加入 `set_input_delay` 與 `set_output_delay`。
+因此，目前 Timing Report 可以確實驗證「暫存器與暫存器之間」的 implementation timing，但尚不能將本次結果直接視為完整的外部：
+
+`Input → ALU_V2 → Output`
    
 ### 未來優化方向（依 Timing Report 的 Net/Logic Delay 比例修正）
 
+本次雖然成功將 ALU_V1 與 ALU_V2 的 WNS 收斂至接近 0，但 Timing Report 也顯示目前的 timing constraint 尚未完整描述外部輸入與輸出介面。
+因此下一階段將從「完整 timing constraint」與「Stage 1 / Stage 2 平衡」兩個方向進行優化。
 
+#### 1. 補完整 Input / Output Timing Constraint
+
+目前 XDC 主要使用：
+
+`create_clock`
+
+尚未加入：
+
+`set_input_delay`
+`set_output_delay`
+
+下一階段將根據實際設計介面，補上 Input / Output Delay，讓 Vivado 能夠真正分析：
+
+`External Input → Stage 1 Register`
+
+以及：
+
+`Stage 2 Register → External Output`
+
+藉此確認目前 3.65 ns 的結果是否仍能代表完整 interface timing，而不是只反映 pipeline 內部 register-to-register path。
+
+#### 2. 重新確認 Stage 1 Timing
+
+目前 V2 的 Timing Report 主要路徑集中在 Stage 1 Register → Stage 2 Register。
+
+因此下一步會特別檢查：
+
+- Stage 1 是否真的比 Stage 2 更容易收斂
+- Input Register → Stage 1 Register 是否存在未被完整分析的 path
+- Stage 1 與 Stage 2 的 combinational delay 是否平衡
+
+如果補上完整 constraint 後發現 Stage 1 成為新的 critical path，再針對 Stage 1 的邏輯進行重構。
+
+#### 3. 針對 Critical Path 進行邏輯與 Routing 優化
+
+若完整 timing constraint 建立後仍由 V2 的 Stage 1 / Stage 2 path 成為瓶頸，將進一步觀察 Timing Report 中：
+
+- Logic Delay
+- Net Delay
+- High Fanout
+- Critical Path 的邏輯層數
+
+再決定應優先進行邏輯深度降低，或是降低控制訊號扇出與 routing delay。
+避免單純「一直縮 clock period」，而是根據 Timing Report 判斷真正的瓶頸來源。
+
+#### 4. 重新評估 Pipeline Stage 切割位置
+
+目前 V2 採用：
+
+- Stage 1：前 3 級 Shifter + 33-bit Add/Sub
+- Stage 2：後 2 級 Shifter + Flag / Output logic
+
+若完整 timing analysis 後發現兩個 Stage 的 delay 差距較大，未來可以重新評估 Pipeline boundary，使兩個 stage 的 critical delay 更接近。
+
+目標不是單純增加 Pipeline stage，而是在 latency、FF、LUT 與 operating frequency 之間取得較好的平衡。
 
 ---
 
