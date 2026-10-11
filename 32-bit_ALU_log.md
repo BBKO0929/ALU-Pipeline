@@ -17,6 +17,7 @@
 | [8/5](#m08d05) | 32bit_ALU_V2（pipeline） - 第一次 Synthesis + Implementation 結果，並記錄收斂到 WNS 接近 0 的結果 |
 | [8/11](#m08d11) | 32bit_ALU_V2（pipeline） - 主動重構，把邏輯運算與 SLT 先獨立拆成一個組合邏輯 ，Stage1 暫存器改成**每拍無條件更新** |
 | [8/17](#m08d17) | 32bit_ALU_V2（pipeline） - 主動重構，優化 Stage1 暫存器位元寬度精簡、SLT 共用加減法器硬體 |
+| [10/11](#m10d11) | 32bit_ALU_V2（pipeline） -  |
 
 ---
 
@@ -1419,6 +1420,116 @@ endmodule
 兩個版本皆使用同一組手動計算 golden value 的 corner case testbench（涵蓋 8 種運算、ADD overflow 邊界、SRA 符號延伸、有號數 SLT 比較、shamt 邊界值 0 與 31），確保每一輪 RTL 修改後功能仍與設計預期一致，時序數據也是建立在功能正確的前提下才具有比較意義。
 
 
+
+[回目錄](#toc)
+
+---
+<a id="m10d11"></a>
+
+## 2026 年 10 月 11 日
+
+
+## 今日成果探討：
+### ALU 設計：
+### 32bit_ALU_V1（baseline） - 收斂到 WNS 最接近 0 的結果
+* Constraints sources 
+```
+create_clock -period 6.3 -name clk [get_ports clk]
+```
+
+#### 模擬結果
+* period 6.3：
+	* 反推 Fmax：`(6.3 − 0.064) = 6.236ns -> Fmax ≈ 1000 / 6.236 ≈ 160.359 MHz`
+<img width="2229" height="198" alt="image" src="https://github.com/user-attachments/assets/453606f7-0423-4bbe-ba1e-a525d1269aed" />
+
+### ALU_V1（Baseline）最終基準線數據
+* Period = 6.3 ns, WNS = 0.064 ns
+* Fmax ≈ 160.359 MHz
+* LUT = 349, FF = 103
+* Data Path Delay(關鍵路徑實際延遲)： 6.245 ns
+<img width="1803" height="487" alt="image" src="https://github.com/user-attachments/assets/31a70d58-92f6-4ad3-b569-d0cba9932f08" />
+
+---
+### 32bit_ALU_V2（pipeline）
+#### 1. 發現舊版缺少輸入約束，完整的［輸入->輸出］沒被量到，所以建立 alu_v2_wrapper ［輸入暫存器 → Stage 1 邏輯 → Stage 1 暫存器］路徑
+* 程式碼
+  ```verilog
+  	module alu_v2_wrapper(
+    
+    input clk,
+    input rst_n,
+    input [31:0]a_in,
+    input [31:0]b_in,
+    input [2:0]op_in,
+    output [31:0]res_out,
+    output [3:0]flag_out
+    
+    );
+    
+    reg [31:0]a_r, b_r; // 鎖住輸入的暫存器，posedge clk 時取樣 a_in/b_in
+    reg [2:0]op_r; // 鎖住輸入的暫存器，posedge clk 時取樣 op_in
+    reg rst_r;
+    
+    always@(posedge clk)begin
+        a_r <= a_in;
+        b_r <= b_in;
+        op_r <= op_in;
+        rst_r <= rst_n;
+    end
+
+  	// alu_v2：核心，接的是已經被鎖住的 a_r/b_r/op_r（不是原始輸入a_in、b_in、op_in）
+    alu_v2 core(
+        .clk(clk),
+        .rst_n(rst_r),
+        .a(a_r),
+        .b(b_r),
+        .op_code(op_r),
+        .res(res_out),
+        .flag(flag_out)
+    );
+    
+	endmodule
+  ```
+
+#### 2. 收斂到 WNS 最接近 0 的結果
+* Constraints sources
+```
+create_clock -period 3.65 -name clk [get_ports clk]
+```
+
+#### 模擬結果
+1. period 3.65：
+   * 反推 Fmax：`(3.65 - 0.075) = 3.575ns -> Fmax ≈ 1000 / 3.575 ≈ 279.72 MHz`
+<img width="2231" height="221" alt="image" src="https://github.com/user-attachments/assets/30d40fb8-a402-4509-8af4-c6294ff48333" />
+
+### ALU_V2（Pipeline）最終基準線數據
+* Period = 3.65 ns, WNS = 0.075 ns
+* Fmax ≈ 279.72 MHz
+* LUT = 323, FF = 240
+* Data Path Delay(關鍵路徑實際延遲)： 3.515ns
+<img width="1784" height="526" alt="image" src="https://github.com/user-attachments/assets/019b4651-04de-4ff6-84f7-e5b75f687d57" />
+
+
+### Baseline vs Pipeline 最終對照表
+
+| 項目 | Baseline（alu_v1） | Pipeline（alu_v2, 2-stage） |
+|---|---|---|
+| Period（收斂值） | 6.3 ns | 3.65 ns |
+| WNS | 0.064 ns | 0.075 ns |
+| Fmax | ≈ 160.35 MHz | ≈ 279.72 MHz |
+| Data Path Delay(關鍵路徑實際延遲) | 6.245ns | 3.515ns |
+| LUT | 349 | 323 |
+| FF | 103 | 240 |
+| Latency | 1 cycle | 2 cycle |
+
+### 說明
+
+   
+### 未來優化方向（依 Timing Report 的 Net/Logic Delay 比例修正）
+
+
+
+---
 
 [回目錄](#toc)
 
