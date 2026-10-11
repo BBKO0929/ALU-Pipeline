@@ -17,7 +17,7 @@
 | [8/5](#m08d05) | 32bit_ALU_V2（pipeline） - 第一次 Synthesis + Implementation 結果，並記錄收斂到 WNS 接近 0 的結果 |
 | [8/11](#m08d11) | 32bit_ALU_V2（pipeline） - 主動重構，把邏輯運算與 SLT 先獨立拆成一個組合邏輯 ，Stage1 暫存器改成**每拍無條件更新** |
 | [8/17](#m08d17) | 32bit_ALU_V2（pipeline） - 主動重構，優化 Stage1 暫存器位元寬度精簡、SLT 共用加減法器硬體 |
-| [10/11](#m10d11) | 建立較完整的 ALU_V2 timing 測試環境，並重新將 ALU_V1 與 ALU_V2 的 clock period 逐步壓低，直到 WNS 收斂至最接近 0 |
+| [10/11](#m10d11) | 最終數據：建立較完整的 ALU_V2 timing 測試環境，並重新將 ALU_V1 與 ALU_V2 的 clock period 逐步壓低，直到 WNS 收斂至最接近 0 |
 
 ---
 
