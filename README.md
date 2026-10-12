@@ -48,13 +48,8 @@
 ### 在 alu_v1 中的 critical path
 
 #### Barrel Shifter + Zero Flag（最主要的 Critical Path，實際终點是 flag_out_reg[3]，而非 res_out）
-  * 邏輯結構：採用 5 階串聯的條件選擇器（b[0] ~ b[4]）對應 1, 2, 4, 8, 16 bits 移位，
-    移位結果再經過 32-bit NOR Reduction 判斷 Zero Flag。
-  * 延遲原因：訊號必須連續穿過 5 個 32-bit MUX，每一個 MUX 的 Gate Delay 會線性累加；
-    移位結果出來後，還要再疊加一段 32-bit NOR Reduction 樹才能鎖入 flag_out，
-    兩段邏輯相加才是全模組最長的邏輯鏈（實測 Data Path Delay = 6.710ns，對應 flag_out_reg[3]）。
-  * 補充：走到 res_out 的路徑（純移位、不含 Flag 判斷）Slack 還有 1.4ns 以上餘裕，
-    並非真正瓶頸，代表 Zero Flag 的判斷邏輯才是壓垮 WNS 的最後一根稻草。
+  * 邏輯結構：採用 5 階串聯的條件選擇器（b[0] ~ b[4]）對應 1, 2, 4, 8, 16 bits 移位，移位結果再經過 32-bit NOR Reduction 判斷 Zero Flag。
+  * 延遲原因：訊號必須連續穿過 5 個 32-bit MUX，每一個 MUX 的 Gate Delay 會線性累加；移位結果出來後，還要再疊加一段 32-bit NOR Reduction 樹才能鎖入 flag_out，兩段邏輯相加才是全模組最長的邏輯鏈（實測 Data Path Delay = 6.245ns，對應 flag_out_reg[3]）。
 
 #### 33-bit Add/Sub（加減法器）：次要瓶頸
   * 邏輯結構：assign add_sub = {1'b0, a} + {1'b0, b_op} + sub;
@@ -97,7 +92,7 @@
 
 4. Pipeline 化後 Zero Flag 不再是瓶頸
     * Baseline 中，Zero Flag 需等移位器 5 級 MUX 全部跑完後，再疊加一層 32-bit NOR Reduction，是實測中真正決定 WNS 的路徑。
-   * Pipeline 化後，因為切成兩級，Stage 2 只需處理後 2 級 MUX（8, 16 bits）加上收斂後的 Flag/最終選擇邏輯，NOR Reduction 疊加在較短的路徑上，不再是全模組最長路徑；實測顯示 V2 的最長路徑（Path 1）反而落在 res_reg 的移位輸出，而非flag_out——代表 pipeline 切割同時解決了「移位延遲」與「Flag 延遲疊加」兩個問題，而不只是單純把加法器和移位器分開。
+    * Pipeline 化後，因為切成兩級，Stage 2 只需處理後 2 級 MUX（8, 16 bits）加上收斂後的 Flag/最終選擇邏輯，NOR Reduction 疊加在較短的路徑上，不再是全模組最長路徑；實測顯示 V2 的最長路徑（Path 1）反而落在 res_reg 的移位輸出，而非flag_out——代表 pipeline 切割同時解決了「移位延遲」與「Flag 延遲疊加」兩個問題，而不只是單純把加法器和移位器分開。
 
 5. **Timing Balance (時序平衡)**： Stage 1（前 3 階 Mux + 加法器傳遞）與 Stage 2（後 2 階 Mux + Mux 選通 + Flag 判斷）的閘延遲幾乎完全相當，成功達到時序平衡。
 ---
@@ -285,7 +280,7 @@
    目前 XDC 主要只有 `create_clock`，尚未加入 `set_input_delay` / `set_output_delay`。下一步將補齊完整 interface timing，確認 3.65 ns 結果是否仍能代表完整外部路徑。
 
 3. **硬體共用策略驗證**  
-   曾嘗試讓 SLT 透過「符號位 XOR 溢位旗標」共用加減法器路徑，理論上應節省面積，但實測 LUT 反而增加（317 → 392），Fmax 也略降。此經驗再次驗證：架構層級優化必須透過實際 Synthesis 與 Timing Report 數據確認，而非僅憑理論推導。
+   曾嘗試讓 alu_v2_pipeline（依8/5數據於8/11重構） SLT 透過「符號位 XOR 溢位旗標」共用加減法器路徑，理論上應節省面積，但實測 LUT 反而增加（317 → 392），Fmax 也略降。此經驗再次驗證：架構層級優化必須透過實際 Synthesis 與 Timing Report 數據確認，而非僅憑理論推導。
 
 ---
 
