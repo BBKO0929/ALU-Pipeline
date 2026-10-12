@@ -280,7 +280,7 @@
    目前 XDC 主要只有 `create_clock`，尚未加入 `set_input_delay` / `set_output_delay`。下一步將補齊完整 interface timing，確認 3.65 ns 結果是否仍能代表完整外部路徑。
 
 3. **硬體共用策略驗證**  
-   曾嘗試讓 alu_v2_pipeline（依8/5數據於8/11重構） SLT 透過「符號位 XOR 溢位旗標」共用加減法器路徑，理論上應節省面積，但實測 LUT 反而增加（317 → 392），Fmax 也略降。此經驗再次驗證：架構層級優化必須透過實際 Synthesis 與 Timing Report 數據確認，而非僅憑理論推導。
+   曾嘗試讓 alu_v2_pipeline（依8/5數據於8/17重構） SLT 透過「符號位 XOR 溢位旗標」共用加減法器路徑，理論上應節省面積，但實測 LUT 反而增加（317 → 392），Fmax 也略降。此經驗再次驗證：架構層級優化必須透過實際 Synthesis 與 Timing Report 數據確認，而非僅憑理論推導。
 
 ---
 
