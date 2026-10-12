@@ -1,49 +1,53 @@
-# 32-bit 的加法器/運算單元（ALU）Pipeline
+# 32-bit Pipelined ALU
 
-本專案旨在基於硬體流水線（Pipeline）架構，設計一款兼具高效能與面積效益的 32 位元運算單元。
+本專案以硬體流水線（Pipeline）架構，從零設計一顆 32-bit 運算單元（ALU），完整涵蓋 RTL 撰寫、功能驗證、Synthesis 與 STA 時序分析，並透過架構優化驗證「架構設計決定電路效能上限」的核心觀點。
 
-## 開發進度與自主學習日誌
+## 開發進度與學習日誌
 
-- **[點我觀看完整的「每日學習與 Debug 日誌」—— 記錄由 Verilog 語法自學到 Vivado 工具鏈操作的每日進度與踩坑經驗](./learning_log.md)**
-- **[點我觀看完整的「專題製作過程與 Debug 日誌 —— 完整記錄 ALU 從 baseline 到 pipeline 化的架構決策與除錯過程」](./32-bit_ALU_log.md)**
-- **[點我觀看「參考文獻」](./References.md)**
-------------------------------
+- [點我觀看專題製作過程與 Debug 日誌](./32-bit_ALU_log.md) — 完整記錄從 Baseline 到 Pipeline 的架構決策與除錯過程
+- [點我觀看每日學習與 Debug 日誌](./learning_log.md) — 從 Verilog 語法自學到 Vivado 工具鏈的每日進度
+- [點我觀看參考文獻](./References.md)
 
-## 核心亮點與 PPA 性能對比 (Performance & Trade-off)
-
-針對 Baseline（純組合邏輯）與 Pipeline（2-Stage 流水線）版本進行 STA 靜態時序分析對比，結果如下：
-
-| 項目 | Baseline（alu_v1） | Pipeline（alu_v2, 2-stage） |
-|---|---|---|
-| Period（收斂值） | 7.2 ns | 4.5 ns |
-| WNS | 0.516 ns | 0.551 ns |
-| Fmax | ≈ 149.6 MHz | ≈ 253.2 MHz |
-| Data Path Delay(關鍵路徑實際延遲) | 6.710ns | 3.813ns |
-| LUT | 327 | 317 |
-| FF | 103 | 172 |
-| Latency | 1 cycle | 2 cycle |
-
-**核心要點：**
-1. Baseline 版本是純組合邏輯，加法器用 Ripple Carry Adder（RCA 的 critical path 隨位元數線性成長，這也是業界會改用 Carry Lookahead Adder 或 Carry Select Adder 的原因；本專題保留 RCA 作為 baseline 正是為了凸顯 pipeline 優化前的瓶頸來源。），關鍵路徑是進位一路傳到最高位，限制了整體時脈上限，收斂後 Fmax 約 149.6MHz(對應關鍵路徑實際延遲 6.710ns)。
-   
-2. Pipeline 版本把資料路徑切成 2 個 stage，中間插入暫存器，把原本一次算完的長路徑拆成兩段較短的路徑，單一 stage 的關鍵路徑延遲由 6.710ns 降至 3.813ns，收斂後 Fmax 約 253.2MHz，相較 baseline 提升約 1.69 倍。
-   
-3. trade-off:
-	* 用「暫存器(FF)數量換取頻率/吞吐量」:FF 用量從 103 增加到 172(多了約 69 顆暫存器,用於 Stage1/Stage2 之間鎖存中繼資料)
-	* LUT 用量反而略降(327→317)：因為 Baseline 中 ADD/SUB、邏輯運算、移位、SLT 四種結果各自需要獨立的輸出多工器(4-to-1 MUX)依 op_code 選擇；Pipeline 版本因為 Stage1 已提前算出並鎖存 add_sub 結果，Stage2 的 final_res 選擇邏輯改為直接從已鎖存的中間值中選取，讓 Synthesizer 得以合併重複的選擇邏輯，因此 LUT 不增反減——資源增加主要來自新增的暫存器，而非額外的運算邏輯。
-	* Latency 則從 1 cycle 增加為 2 cycle，犧牲單筆資料的延遲，換取整體吞吐量(throughput)與可運作頻率的提升
-
-4. 兩個版本的功能都用同一組 testbench 驗證過，結果完全等價，確保這組時序數據的比較是建立在功能正確、公平的基準。
 ---
 
-## 架構設計與流水線切割策略 (Microarchitecture)
+## 核心亮點與最終時序對比（2026/10/11）
+
+針對 Baseline（純組合邏輯）與 Pipeline（2-Stage）版本，使用相同 testbench 驗證功能等價後，以逐步壓低 clock period 的方式收斂至 WNS 接近 0，取得實際可運作頻率上限：
+
+| 項目                          | Baseline (alu_v1)      | Pipeline (alu_v2)          |
+|-------------------------------|------------------------|----------------------------|
+| Period（收斂值）              | 6.3 ns                 | 3.65 ns                    |
+| WNS                           | 0.064 ns               | 0.075 ns                   |
+| Data Path Delay（關鍵路徑）   | 6.245 ns               | 3.515 ns                   |
+| Fmax                          | ≈ 160.35 MHz           | ≈ 279.72 MHz (**+74.5%**)  |
+| LUT                           | 349                    | 323                        |
+| FF                            | 103                    | 240                        |
+| Latency                       | 1 cycle                | 2 cycle                    |
+
+### 核心要點
+
+1. **Baseline** 為純組合邏輯，加法器採用 Ripple Carry Adder。關鍵路徑來自 Barrel Shifter（5 級 MUX）疊加 Zero Flag 的 32-bit NOR Reduction，收斂後 Fmax 約 160.35 MHz。
+
+2. **Pipeline** 將資料路徑切成 2 個 stage，中間插入暫存器，單一 stage 的關鍵路徑延遲由 6.245 ns 降至 3.515 ns，Fmax 提升至約 279.72 MHz（約 1.75 倍）。
+
+3. **Trade-off**
+   - 用暫存器（FF）數量換取頻率與吞吐量：FF 從 103 → 240。
+   - 因 Stage1 已算出 add_sub 結果，Stage2 選擇邏輯可直接沿用，Synthesizer 得以合併重複的輸出多工器，LUT 用量反而略降（349 → 323）。
+   - Latency 從 1 cycle 增加為 2 cycle，犧牲單筆資料延遲，換取整體吞吐量與可運作頻率的提升。
+
+4. 兩個版本皆使用同一組 corner-case testbench（含 ADD/SUB、邏輯運算、SRA 符號延伸、Overflow 邊界、有號數 SLT、shamt 極值 0/31）驗證，確保時序比較建立在功能正確的公平基準上。
+
+---
+
+## 架構設計與流水線切割策略
 <img width="544" height="316" alt="image" src="https://github.com/user-attachments/assets/edfdfcaf-8039-4a88-8e76-640d7a6a100d" />
 <img width="923" height="507" alt="image" src="https://github.com/user-attachments/assets/24a57abe-c425-42a0-8ac1-af8253aafec1" />
 
+---
 
-### 1. 在 alu_v1 中的 critical path
+### 在 alu_v1 中的 critical path
 
-* Barrel Shifter + Zero Flag（最主要的 Critical Path，實際终點是 flag_out_reg[3]，而非 res_out）
+#### Barrel Shifter + Zero Flag（最主要的 Critical Path，實際终點是 flag_out_reg[3]，而非 res_out）
   * 邏輯結構：採用 5 階串聯的條件選擇器（b[0] ~ b[4]）對應 1, 2, 4, 8, 16 bits 移位，
     移位結果再經過 32-bit NOR Reduction 判斷 Zero Flag。
   * 延遲原因：訊號必須連續穿過 5 個 32-bit MUX，每一個 MUX 的 Gate Delay 會線性累加；
@@ -52,56 +56,57 @@
   * 補充：走到 res_out 的路徑（純移位、不含 Flag 判斷）Slack 還有 1.4ns 以上餘裕，
     並非真正瓶頸，代表 Zero Flag 的判斷邏輯才是壓垮 WNS 的最後一根稻草。
 
-* 33-bit Add/Sub（加減法器）：次要瓶頸
+#### 33-bit Add/Sub（加減法器）：次要瓶頸
   * 邏輯結構：assign add_sub = {1'b0, a} + {1'b0, b_op} + sub;
   * 延遲原因：高位元（MSB）必須等待低位元（LSB）一路傳遞上來的進位訊號（Carry Chain），
     需等待 32 個 Full Adder 的傳遞延遲。
 
-* 位元邏輯運算（AND / OR / XOR）：非瓶頸
+#### 位元邏輯運算（AND / OR / XOR）：非瓶頸
   * 邏輯結構：32-bit 平行運算。
   * 延遲原因：僅需經過 1 階邏輯門，無位元間的依賴關係，延遲極短。
 
-* SLT（Set Less Than）：非瓶頸
+#### SLT（Set Less Than）：非瓶頸
   * 邏輯結構：直接沿用 33-bit Add/Sub 運算出的最高位元（符號位）與 Overflow 判斷結果，
     不需額外的比較運算路徑。
   * 延遲原因：與 Flag 產生邏輯共用同一組加法器輸出，延遲可忽略，
     不會拖累整體 critical path。
+    
+---
 
-### 2. 流水線（Pipelining）切割策略
+### 2-Stage Pipeline 切割原則
 <img width="581" height="648" alt="image" src="https://github.com/user-attachments/assets/084ded80-5b4e-479d-ac07-4312b5f50bf4" />
 
-   
-   * 2-Stage Pipeline 切割方案 (縱向階段切割)
-     * Stage 1：Shifter 前 3 階 (b[0]~b[2]: 1, 2, 4 bits 移位) ； 33-bit 加減法運算 (ADD / SUB / SLT)
-     * Stage 2：Shifter 後 2 階 (b[3]~b[4]: 8, 16 bits 移位)；Flag 生成 (Z, N, C, V)
+#### 2-Stage Pipeline 切割方案 (縱向階段切割)
+1. Stage 1：Shifter 前 3 階 (b[0]~b[2]: 1, 2, 4 bits 移位) ； 33-bit 加減法運算 (ADD / SUB / SLT)
+2. Stage 2：Shifter 後 2 階 (b[3]~b[4]: 8, 16 bits 移位)；Flag 生成 (Z, N, C, V)
 
-   * 2-Stage Pipeline 切割方案原因
-     * 時間延遲的「均等平分」（Timing Balance）
-     * Pipeline 切割遵循『各級延遲盡量平衡』原則（balanced pipeline staging），避免單一 stage 成為新的瓶頸，此為流水線設計的基本準則（參考 Hennessy & Patterson, Computer Organization and Design, Pipelining 章節）。
-       * 桶型移位器總共有 5 階 MUX 選擇器
-       * Stage 1 切前 3 階（1, 2, 4 bits）： 穿過 3 個 MUX。
-       * Stage 2 切後 2 階（8, 16 bits）： 穿過 2 個 MUX ＋ 1 個最終輸出的 MUX（多路選擇 case）。
-       * 讓 Stage 1 與 Stage 2 的邏輯門延遲（Gate Delay）平分
+#### 2-Stage Pipeline 切割方案原因
+1. 時間延遲的「均等平分」（Timing Balance）：Pipeline 切割遵循『各級延遲盡量平衡』原則（balanced pipeline staging），避免單一 stage 成為新的瓶頸，此為流水線設計的基本準則（參考 Hennessy & Patterson, Computer Organization and Design, Pipelining 章節）。
+    * 桶型移位器總共有 5 階 MUX 選擇器
+    * Stage 1 切前 3 階（1, 2, 4 bits）： 穿過 3 個 MUX。
+    * Stage 2 切後 2 階（8, 16 bits）： 穿過 2 個 MUX ＋ 1 個最終輸出的 MUX（多路選擇 case）。
+    * 讓 Stage 1 與 Stage 2 的邏輯門延遲（Gate Delay）平分
     
-	 * 邏輯跨度與加法器同步
-      * 加法器的延遲： 32-bit 的進位鏈（Carry Chain）傳播時間，大約剛好等於 2 ~ 3 個 MUX 的延遲。
-      * 在 Stage 1：當移位器做完前 3 階（1, 2, 4 bits）時，33-bit 加法器也剛好算完！
-      * 兩大運算單元可以在同一個時脈邊緣（Clock Edge） 一起將結果鎖進 Stage 1 暫存器。
+2. 邏輯跨度與加法器同步
+    * 加法器的延遲： 32-bit 的進位鏈（Carry Chain）傳播時間，大約剛好等於 2 ~ 3 個 MUX 的延遲。
+    * 在 Stage 1：當移位器做完前 3 階（1, 2, 4 bits）時，33-bit 加法器也剛好算完！
+    * 兩大運算單元可以在同一個時脈邊緣（Clock Edge） 一起將結果鎖進 Stage 1 暫存器。
         
-	 * 簡化 Stage 2 的 SLT 與 Flag 計算
-	  * 因為加法器在 Stage 1 已經算完了 add_sub ，所以 Stage 2 就可以直接利用 Stage 1 留下來的 add / sub 結果來判斷溢位（Overflow）與產生 Flag，不會擠壓到 Stage 2 的時序。
+3. 簡化 Stage 2 的 SLT 與 Flag 計算
+	* 因為加法器在 Stage 1 已經算完了 add_sub ，所以 Stage 2 就可以直接利用 Stage 1 留下來的 add / sub 結果來判斷溢位（Overflow）與產生 Flag，不會擠壓到 Stage 2 的時序。
 
-   * Pipeline 化後 Zero Flag 不再是瓶頸
-      * Baseline 中，Zero Flag 需等移位器 5 級 MUX 全部跑完後，再疊加一層 32-bit NOR Reduction，是實測中真正決定 WNS 的路徑。
-      * Pipeline 化後，因為切成兩級，Stage 2 只需處理後 2 級 MUX（8, 16 bits）加上收斂後的 Flag/最終選擇邏輯，NOR Reduction 疊加在較短的路徑上，不再是全模組最長路徑；實測顯示 V2 的最長路徑（Path 1）反而落在 res_reg 的移位輸出，而非 flag_out——代表 pipeline 切割同時解決了「移位延遲」與「Flag 延遲疊加」兩個問題，而不只是單純把加法器和移位器分開。
+4. Pipeline 化後 Zero Flag 不再是瓶頸
+    * Baseline 中，Zero Flag 需等移位器 5 級 MUX 全部跑完後，再疊加一層 32-bit NOR Reduction，是實測中真正決定 WNS 的路徑。
+   * Pipeline 化後，因為切成兩級，Stage 2 只需處理後 2 級 MUX（8, 16 bits）加上收斂後的 Flag/最終選擇邏輯，NOR Reduction 疊加在較短的路徑上，不再是全模組最長路徑；實測顯示 V2 的最長路徑（Path 1）反而落在 res_reg 的移位輸出，而非flag_out——代表 pipeline 切割同時解決了「移位延遲」與「Flag 延遲疊加」兩個問題，而不只是單純把加法器和移位器分開。
 
-* **Timing Balance (時序平衡)**： Stage 1（前 3 階 Mux + 加法器傳遞）與 Stage 2（後 2 階 Mux + Mux 選通 + Flag 判斷）的閘延遲幾乎完全相當，成功達到時序平衡。
+5. **Timing Balance (時序平衡)**： Stage 1（前 3 階 Mux + 加法器傳遞）與 Stage 2（後 2 階 Mux + Mux 選通 + Flag 判斷）的閘延遲幾乎完全相當，成功達到時序平衡。
+---
 
-### 3. 驗證與硬體除錯實務 (Verification & Debugging)
+### 驗證與硬體除錯實務 (Verification & Debugging)
 
-### Self-Checking Testbench 設計
-* 涵蓋 ADD/SUB, AND/OR/XOR, SRA 符號延伸、ADD Overflow 邊界案例、SLT 有號數比較 與 Shamt 極值 (0, 31)。
-* 使用 task automatic check 實現自動比對與錯誤計數。
+#### Self-Checking Testbench 設計
+1. 涵蓋 ADD/SUB, AND/OR/XOR, SRA 符號延伸、ADD Overflow 邊界案例、SLT 有號數比較 與 Shamt 極值 (0, 31)。
+2. 使用 task automatic check 實現自動比對與錯誤計數。
 * ex. ALU_V2（Pipeline） simulation sources
   ```verilog
   module alu_v2_tt();
@@ -188,9 +193,10 @@
         $finish;       
     end  
   ```
+---
 
 ### 關鍵 Debug 經驗與原理
-* Verilog Event Queue Race Condition 解決：
+1. Verilog Event Queue Race Condition 解決：
   * 問題： Testbench 與 RTL 同步在 posedge clk 採樣，由於非阻塞賦值（NBA）在同點更新，導致讀取到舊值（Race condition）。
   * 解法： 在比對前加入 #1 時間延遲（@(posedge clk); #1;），確保讀值時 NBA 已真正落地（Settled）。
   	* 在 testbench 中加入 #1 delay 屬於 Verilog 模擬中常見的 race condition 規避手法，因為非阻塞賦值（NBA）在同一時脈邊緣的實際更新時機晚於觸發，此為 IEEE 1364 Verilog 標準中定義的排程語意（scheduling semantics）。
@@ -200,7 +206,7 @@
     #1; // 確保讀值時 NBA（非阻塞賦值） 已經真正落地
     ```
 
-* 純組合邏輯 STA 靜態時序分析（Wrapper 設計）：
+2. 純組合邏輯 STA 靜態時序分析（Wrapper 設計）：
   * 問題： Baseline 版本缺少 Clock，無法建立 Register-to-Register Timing Path。
   * 解法： 包裹一層 alu_v1_wrapper 加入輸入/輸出暫存器，確立 Timing Path 進行精準 STA。
     ```verilog
@@ -243,30 +249,59 @@
 
     endmodule
     ```
-
+---
 ### 32bit_ALU_V1（Baseline） - Synthesis + Implementation 結果，並記錄收斂到 WNS 接近 0 的結果
 
-* ALU_V1（Baseline）最終基準線數據
+#### ALU_V1（Baseline）最終基準線數據
 <img width="214" height="251" alt="image" src="https://github.com/user-attachments/assets/806079cd-4cc0-4a13-b4b7-5297b3a1180a" />
-<img width="1327" height="99" alt="image" src="https://github.com/user-attachments/assets/a5696367-fd6b-4b48-9b5b-79145aaacbf5" />
-<img width="1909" height="496" alt="image" src="https://github.com/user-attachments/assets/cd72dd8c-dcbc-4e5c-b5ea-c294d14696f5" />
+<img width="2229" height="198" alt="image" src="https://github.com/user-attachments/assets/37cc12a9-a720-4066-b4b0-1da357f745d1" />
+<img width="1803" height="487" alt="image" src="https://github.com/user-attachments/assets/94f08a07-f7a5-4252-8ef5-b7cab7067b97" />
 
-* Period = 7.2ns, WNS = 0.516ns
-* Fmax ≈ 149.6 MHz
-* LUT = 327, FF = 103
+* Period = 6.3ns, WNS = 0.064ns
+* Data path delay（critical path）：6.245ns
+* Fmax ≈ 160.35 MHz（以 Period − WNS 反推）
+* LUT = 349, FF = 103
 
 ### 32bit_ALU_V2（pipeline） - Synthesis + Implementation 結果，並記錄收斂到 WNS 接近 0 的結果
-* ALU_V2（pipeline）最終基準線數據
+#### ALU_V2（pipeline）最終基準線數據
 <img width="213" height="257" alt="image" src="https://github.com/user-attachments/assets/e6e79d99-8720-451a-ae4d-08f9bbb5e3b7" />
-<img width="1334" height="90" alt="image" src="https://github.com/user-attachments/assets/2dbb2fc8-a190-44de-8fe9-cfb091fc207f" />
-<img width="1062" height="387" alt="image" src="https://github.com/user-attachments/assets/6beb2c5e-173a-4285-907e-b0ef765f42f5" />
+<img width="2231" height="221" alt="image" src="https://github.com/user-attachments/assets/6bcf465b-98e7-4994-bacf-ebcfbfce3bf8" />
+<img width="1784" height="526" alt="image" src="https://github.com/user-attachments/assets/9d56b235-fe75-4243-9a42-56923794aeb6" />
 
-* Period = 4.5 ns, WNS = 0.551 ns
-* Fmax ≈ 253.2 MHz
-* LUT = 317, FF = 172
+* Period = 3.65 ns, WNS = 0.075 ns
+* Data path delay（critical path）：3.515ns
+* Fmax ≈ 279.72 MHz（以 Period − WNS 反推）
+* LUT = 323, FF = 240
 
-### 4. 未來實體布局優化方向 (Physical Design & Fanout)
-* 根據 Vivado Implementation Timing Report 分析：
-  * Net Delay 遠大於 Logic Delay（如 Net: 2.611ns vs Logic: 1.202ns），控制訊號高扇出（High Fanout = 16~32）為最後瓶頸。
+## 未來優化方向
 
-* 下一步優化提案： 針對 Stage 1 的 op_code 採用 One-hot 提前解碼，並下達 MAX_FANOUT 約束促進工具進行暫存器複製（Register Replication），進一步削減 Net Delay。
+#### 根據最終 Timing Report 觀察：
+<img width="1784" height="526" alt="image" src="https://github.com/user-attachments/assets/7d8b31c1-5eca-4765-b1be-663a7ba0677e" />
+
+1. **高扇出控制訊號**  
+   Worst Path 的 Net Delay 明顯大於 Logic Delay，且 `op_code_stg1` 等高扇出訊號達到 24~72。未來可嘗試提早解碼為 one-hot，或透過 XDC 下 `MAX_FANOUT` 約束讓工具進行 register replication。
+
+2. **完整 Timing Constraint**  
+   目前 XDC 主要只有 `create_clock`，尚未加入 `set_input_delay` / `set_output_delay`。下一步將補齊完整 interface timing，確認 3.65 ns 結果是否仍能代表完整外部路徑。
+
+3. **硬體共用策略驗證**  
+   曾嘗試讓 SLT 透過「符號位 XOR 溢位旗標」共用加減法器路徑，理論上應節省面積，但實測 LUT 反而增加（317 → 392），Fmax 也略降。此經驗再次驗證：架構層級優化必須透過實際 Synthesis 與 Timing Report 數據確認，而非僅憑理論推導。
+
+---
+
+## 支援指令與介面
+
+| Opcode | 指令 | 操作          |
+|--------|------|---------------|
+| 000    | ADD  | A + B         |
+| 001    | SUB  | A - B         |
+| 010    | AND  | A & B         |
+| 011    | OR   | A \| B        |
+| 100    | XOR  | A ^ B         |
+| 101    | SLL  | A << shamt    |
+| 110    | SRA  | A >>> shamt   |
+| 111    | SLT  | A < B (signed)|
+
+- 輸入：A[31:0]、B[31:0]、Opcode[2:0]
+- 輸出：Result[31:0]、Flags[3:0]（Z / N / C / V）
+- 移位量取自 B[4:0]
