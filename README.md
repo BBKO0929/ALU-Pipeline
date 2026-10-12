@@ -1,4 +1,4 @@
-# 32-bit Pipelined ALU
+<img width="1113" height="531" alt="image" src="https://github.com/user-attachments/assets/52a180fb-11f6-4064-be14-afeae8b04aa6" /># 32-bit Pipelined ALU
 
 本專案以硬體流水線（Pipeline）架構，從零設計一顆 32-bit 運算單元（ALU），完整涵蓋 RTL 撰寫、功能驗證、Synthesis 與 STA 時序分析，並透過架構優化驗證「架構設計決定電路效能上限」的核心觀點。
 
@@ -61,10 +61,7 @@
   * 延遲原因：僅需經過 1 階邏輯門，無位元間的依賴關係，延遲極短。
 
 #### SLT（Set Less Than）：非瓶頸
-  * 邏輯結構：直接沿用 33-bit Add/Sub 運算出的最高位元（符號位）與 Overflow 判斷結果，
-    不需額外的比較運算路徑。
-  * 延遲原因：與 Flag 產生邏輯共用同一組加法器輸出，延遲可忽略，
-    不會拖累整體 critical path。
+  * SLT 在 Baseline 中主要透過有號數比較實現，延遲相對較短，並非關鍵路徑瓶頸。
     
 ---
 
