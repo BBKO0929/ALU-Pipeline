@@ -1,4 +1,4 @@
-<img width="1113" height="531" alt="image" src="https://github.com/user-attachments/assets/52a180fb-11f6-4064-be14-afeae8b04aa6" /># 32-bit Pipelined ALU
+# 32-bit Pipelined ALU
 
 本專案以硬體流水線（Pipeline）架構，從零設計一顆 32-bit 運算單元（ALU），完整涵蓋 RTL 撰寫、功能驗證、Synthesis 與 STA 時序分析，並透過架構優化驗證「架構設計決定電路效能上限」的核心觀點。
 
