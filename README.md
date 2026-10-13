@@ -12,7 +12,7 @@
 
 ## 核心亮點與最終時序對比
 
-針對 Baseline（純組合邏輯）與 Pipeline（2-Stage）版本，使用相同 testbench 驗證功能等價後，以逐步壓低 clock period 的方式收斂至 WNS 接近 0，取得實際可運作頻率上限：
+針對 Baseline（純組合邏輯）與 Pipeline（2-Stage）版本，使用相同的 10 筆測試向量驗證功能等價後，以逐步壓低 clock period 的方式收斂至 WNS 接近 0，取得實際可運作頻率上限：
 
 | 項目                          | Baseline (alu_v1)      | Pipeline (alu_v2)          |
 |-------------------------------|------------------------|----------------------------|
@@ -26,14 +26,14 @@
 
 ### 核心要點
 
-1. **Baseline** 為純組合邏輯（外包 wrapper 以建立 register-to-register path）。加減法以 + 描述，Vivado 對應到 CARRY4 進位鏈。Path 1 由 opcode → 進位鏈 → 結果選擇 → Zero Flag 串接而成，Data Path Delay 6.245 ns，Fmax ≈ 160.36 MHz。
+1. **Baseline** 為純組合邏輯（外包 wrapper 以建立 register-to-register path）。加減法以 + 描述，Vivado 對應到 CARRY4 進位鏈。Path 1 由 opcode → 進位鏈 → 結果選擇 → Zero Flag 串接而成，Data Path Delay 6.245 ns，Fmax ≈ 160.35 MHz。
 
-2. **Pipeline** 將資料路徑切成 2 個 stage，中間插入暫存器，單一 stage 的關鍵路徑延遲由 6.245 ns 降至 3.515 ns，Fmax 提升至約 279.72 MHz（約 1.74 倍）。
+2. **Pipeline** 將資料路徑切成 2 個 stage，中間插入暫存器，單一 stage 的關鍵路徑延遲由 6.245 ns 降至 3.515 ns，Fmax 提升至約 279.72 MHz（約 1.75 倍）。
 
 3. **Trade-off**
    - 用暫存器（FF）數量換取頻率與吞吐量：FF 從 103 → 240。
    - 因 Stage1 已算出 add_sub 結果，Stage2 選擇邏輯可直接沿用，Synthesizer 得以合併重複的輸出多工器，LUT 用量反而略降（349 → 323）。
-   - Latency 從 1 cycle 增加為 2 cycle，犧牲單筆資料延遲，換取整體吞吐量與可運作頻率的提升。
+   - Latency 從 1 cycle 增加為 2 cycle（指輸入暫存器到輸出暫存器之間的運算週期數），犧牲單筆資料延遲，換取整體吞吐量與可運作頻率的提升。
 
 4. 兩個版本皆使用同一組 10 筆測試向量（V2 因 pipeline 需等待 2 個 clock 後取樣）（含 ADD/SUB、邏輯運算、SRA 符號延伸、Overflow 邊界、有號數 SLT、shamt 極值 0/31）驗證，確保時序比較建立在功能正確的公平基準上。
 
