@@ -59,6 +59,7 @@
 | [10/5](#m10d05) | 影片：Digital Design and Computer Architecture(Spring 2025) L14 |
 | [10/6](#m10d06) | 影片：Digital Design and Computer Architecture(Spring 2025) L15 |
 | [10/7](#m10d07) | 影片：Digital Design and Computer Architecture(Spring 2025) L16 |
+| [10/14](#m10d14) | 資料：複習7/3 - 10/7 內容 |
 
 
 
@@ -10757,6 +10758,18 @@ Two-level predictor 可以用三個維度來分類：
 6. Multipath Execution（多路徑執行）
 
 ---
+
+
+[回目錄](#toc)
+
+---
+<a id="m10d14"></a>
+
+## 2026 年 10 月 14 日
+
+## 今日進度：
+
+### 資料：複習7/3 - 10/7 內容
 
 
 [回目錄](#toc)
