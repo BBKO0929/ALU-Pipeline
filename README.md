@@ -278,7 +278,7 @@ Top-10 中其餘 6 條路徑起點為 `b_r_reg` / `a_r_reg`、終點為 `res_out
 ## 2-Stage Pipeline 切割原則
 <img width="581" height="648" alt="image" src="https://github.com/user-attachments/assets/084ded80-5b4e-479d-ac07-4312b5f50bf4" />
 
-	- 註：各運算路徑於 Stage 1 平行計算，圖中垂直排列僅為版面配置，不代表資料依序串接。
+	- 註：各運算路徑於各 Stage 平行計算，圖中垂直排列僅為版面配置，不代表資料依序串接。
 
 ### 2-Stage Pipeline 切割方案 (縱向階段切割)
 1. Stage 1：Shifter 前 3 階 (b[0]~b[2]: 1, 2, 4 bits 移位) ； 33-bit 加減法運算 (ADD / SUB / SLT)
