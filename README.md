@@ -39,7 +39,7 @@
 
 ---
 
-## 架構設計與流水線切割策略
+## 架構設計
 <img width="544" height="316" alt="image" src="https://github.com/user-attachments/assets/edfdfcaf-8039-4a88-8e76-640d7a6a100d" />
 <img width="923" height="507" alt="image" src="https://github.com/user-attachments/assets/24a57abe-c425-42a0-8ac1-af8253aafec1" />
 
@@ -238,7 +238,7 @@ endmodule
 ---
 ### 在 alu_v1 中的 critical path
 <img width="1803" height="487" alt="image" src="https://github.com/user-attachments/assets/94f08a07-f7a5-4252-8ef5-b7cab7067b97" />
-<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/9f630dd6-cf42-44b0-a244-63a83d307b14" />
+<img width="700" height="500" alt="image" src="https://github.com/user-attachments/assets/9f630dd6-cf42-44b0-a244-63a83d307b14" />
 
 依據 Vivado Timing Report（Path 1，Slack 0.064 ns）：
 
@@ -275,14 +275,14 @@ Top-10 中其餘 6 條路徑起點為 `b_r_reg` / `a_r_reg`、終點為 `res_out
   * SLT 在 Baseline 中主要透過有號數比較實現，延遲相對較短，並非關鍵路徑瓶頸。
 ---
 
-### 2-Stage Pipeline 切割原則
+## 2-Stage Pipeline 切割原則
 <img width="581" height="648" alt="image" src="https://github.com/user-attachments/assets/084ded80-5b4e-479d-ac07-4312b5f50bf4" />
 
-#### 2-Stage Pipeline 切割方案 (縱向階段切割)
+### 2-Stage Pipeline 切割方案 (縱向階段切割)
 1. Stage 1：Shifter 前 3 階 (b[0]~b[2]: 1, 2, 4 bits 移位) ； 33-bit 加減法運算 (ADD / SUB / SLT)
 2. Stage 2：Shifter 後 2 階 (b[3]~b[4]: 8, 16 bits 移位)；Flag 生成 (Z, N, C, V)
 
-#### 2-Stage Pipeline 切割方案原因
+### 2-Stage Pipeline 切割方案原因
 1. 時間延遲的「均等平分」（Timing Balance）：Pipeline 切割遵循『各級延遲盡量平衡』原則（balanced pipeline staging），避免單一 stage 成為新的瓶頸，此為流水線設計的基本準則（參考 Hennessy & Patterson, Computer Organization and Design, Pipelining 章節）。
     * 桶型移位器總共有 5 階 MUX 選擇器
     * Stage 1 切前 3 階（1, 2, 4 bits）： 穿過 3 個 MUX。
