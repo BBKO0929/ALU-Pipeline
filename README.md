@@ -238,7 +238,7 @@ endmodule
 ---
 ### 在 alu_v1 中的 critical path
 <img width="1803" height="487" alt="image" src="https://github.com/user-attachments/assets/94f08a07-f7a5-4252-8ef5-b7cab7067b97" />
-<img width="1179" height="982" alt="image" src="https://github.com/user-attachments/assets/9f630dd6-cf42-44b0-a244-63a83d307b14" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/9f630dd6-cf42-44b0-a244-63a83d307b14" />
 
 依據 Vivado Timing Report（Path 1，Slack 0.064 ns）：
 
