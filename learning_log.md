@@ -63,6 +63,7 @@
 | [10/19](#m10d19) | 資料：複習7/3 - 10/14 內容 |
 | [10/20](#m10d20) | 刷題：複習 HDLBits 7/3 - 10/19 進度|
 | [10/27](#m10d27) | 資料：複習7/3 - 10/20 內容 |
+| [11/17](#m11d17) | 影片：Digital Design and Computer Architecture(Spring 2025) L17 |
 
 
 
@@ -10811,6 +10812,398 @@ Two-level predictor 可以用三個維度來分類：
 
 ### 資料：複習7/3 - 10/20 內容
 
+
+[回目錄](#toc)
+
+---
+<a id="m11d17"></a>
+
+## 2026 年 11 月 17 日
+
+## 今日進度：
+### 資料：
+1. [Digital Design and Computer Architecture(Spring 2025)](https://safari.ethz.ch/ddca/spring2025/doku.php?id=start)
+2. [Digital Design and Computer Architecture, David Harris and Sarah Harris](https://www.sciencedirect.com/book/9780123704979/digital-design-and-computer-architecture)
+
+### 影片：
+1. [Digital Design and Computer Architecture(Spring 2025) L17](https://www.youtube.com/watch?v=QvT_9vznrpg&list=PL5Q2soXY2Zi9Eo29LMgKVcaydS7V1zZW3&index=21)
+
+
+## 關鍵知識/詞彙：
+
+### 複習：Superscalar 與它的限制
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/aecf88e8-3200-4e6e-b6b2-cee79a488edb" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7ca819b1-7ed2-4748-a0f5-c4a17c970ef4" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d98f9903-d000-4375-8903-4872ed9059da" />
+
+
+* Superscalar：一個 cycle 內 fetch、decode、execute、retire 多條指令（N-wide 代表每 cycle N 條）
+* 需要多份 datapath 資源，而且**硬體要對同時 fetch 進來的指令做相依性檢查**
+* 沒有相依時（例如 `lw / add / sub / and / or / sw` 六條互相獨立的指令）：理想 IPC = 2，實際 6 條指令 3 個 cycle 發射完，IPC = 2
+* 有相依時（後面的指令要用前面指令的結果）：理想 IPC 仍是 2，但因為 stall，6 條指令花了 5 個 cycle，**實際 IPC = 1.2**
+* 投影片的思考題：能不能重新排序這些指令讓 IPC 回到 2？這個「重新排序」正是 VLIW 要交給編譯器做的事
+
+---
+
+### VLIW 的核心概念
+
+#### 與 Superscalar 的分工差異
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/73144a39-5315-4b40-9370-24b7cbfaf9bc" />
+
+
+| | Superscalar | VLIW |
+|---|---|---|
+| 誰找出獨立指令 | 硬體在執行期間 fetch 多條指令後做相依性檢查 | **軟體（編譯器）** 在編譯期把互相獨立的指令打包 |
+| 一次 fetch 的單位 | 多條一般指令 | 一個「指令 bundle（很長的指令字）」 |
+| 硬體相依性檢查 | 需要 | **不需要** |
+| 硬體複雜度 | 高 | 低（Simple hardware, complex compiler） |
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/1d12cef3-2d75-4058-8417-72529f333938" />
+
+
+* 一個 very long instruction word 由多條**彼此獨立**的指令組成，由編譯器靜態排程（static scheduling）打包
+* 打包在同一個 bundle 裡的指令在邏輯上可以完全無關（這點跟之後會學的 SIMD / Vector 處理器不同）
+* 歷史源頭：Fisher, *Very Long Instruction Word architectures and the ELI-512*, ISCA 1983（ELI = Enormously longword instructions，512 bits）
+
+#### 傳統 VLIW 的三個特徵
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a1a3296f-25eb-42d4-a233-ccc468c8cb56" />
+
+
+1. 多個 functional unit，一次 fetch 並執行多條指令
+2. 同一個 bundle 裡的指令以 **lock step（同步鎖步）** 方式執行
+3. bundle 裡的指令在位置上就被靜態對齊好，可直接送進對應的 functional unit
+
+#### VLIW 效能範例（2-wide bundle）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/3d69224b-b878-4702-be9b-b0ba2bd457d5" />
+
+
+* 編譯器把六條指令排成三個 bundle：`(lw, add)`、`(sub, and)`、`(or, sw)`
+* 因為每個 bundle 裡的兩條指令保證獨立，**6 條指令 3 個 cycle 發射完，IPC = 2**
+* 重點：這個結果是由編譯器的排程保證的，硬體完全沒有做相依性檢查
+
+---
+
+### Lock-Step 執行
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/b7239ff1-b503-48f6-bfb4-b6b777c59f5c" />
+
+
+
+* **All or none**：bundle 裡只要有一個運算 stall，同一個 bundle 的所有運算都要跟著 stall
+* 在「真正的 VLIW」機器裡：
+  * 編譯器負責處理所有跟相依有關的 stall
+  * 硬體不做相依性檢查
+* 投影片留下的問題：**可變延遲的運算（如 cache miss 的記憶體存取）怎麼辦？** 編譯器在編譯期無法預先得知，這是 VLIW 的根本弱點之一
+
+---
+
+### VLIW 的設計哲學：聰明的編譯器、笨的機器
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/76513270-cce0-4188-bc01-6e87d6b8f8df" />
+
+
+* 論文標題就是這個精神：Fisher et al., *Parallel Processing: A Smart Compiler and a Dumb Machine*, 1984
+* 類比 RISC：
+  * RISC（John Cocke 等人，1970 年代，IBM 801）：編譯器負責把高階語言翻成簡單指令並重排以求高效能，硬體只做很少的翻譯與解碼
+  * VLIW（Josh Fisher，ISCA 1983）：編譯器負責找出 ILP，硬體盡可能簡單，每個 bundle 以 lock step 執行
+* 好處：硬體簡單，所以頻率較高、容易設計、功耗低
+
+---
+
+### 商用 VLIW 機器
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/63e4c3e1-eac3-47d1-b656-f10d66d50c6d" />
+
+
+* Multiflow TRACE（Josh Fisher，7-wide、28-wide）
+* Cydrome Cydra 5（Bob Rau）
+* **Transmeta Crusoe**：把 x86 二進位碼翻譯成內部的 VLIW 指令
+* TI C6000、Trimedia、STMicro（DSP 與嵌入式處理器）以及部分 ATI/AMD GPU：**商業上最成功的 VLIW 應用**
+* **Intel IA-64**：不是完全的 VLIW，但建立在 VLIW 原則上，稱為 **EPIC（Explicitly Parallel Instruction Computing）**
+  * bundle 裡可以有彼此相依的指令
+  * 指令格式中用少數幾個 bit 明確指出 bundle 裡哪些指令相依於哪些指令
+
+---
+
+### VLIW 的優缺點
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/5eb382c2-3837-4c85-b34e-976f1bf3012a" />
+
+
+**優點**
+
+* 不需要動態排程硬體，硬體簡單
+* bundle 內不需要相依性檢查，所以多指令發射的硬體簡單，也不需要 renaming
+* fetch 之後不需要做指令對齊 / 分派到不同 functional unit 的動作
+
+**缺點**
+
+* 編譯器必須每個 cycle 找出 N 條獨立運算；找不到時就要在 bundle 裡塞 **NOP**，造成**並行度損失與程式碼變大**
+* 當執行寬度 N、指令延遲、functional unit 組成改變時，**必須重新編譯**（Superscalar 則不需要）
+* Lock-step 讓彼此獨立的運算也跟著 stall：最長延遲的那條指令完成前，bundle 內沒有任何指令能前進
+
+#### VLIW 小結
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/13b11c40-62c1-4d9e-9a4e-2df923a3e72c" />
+
+
+* VLIW 簡化硬體，但需要複雜的編譯技術
+* 純編譯器方案的下行風險：
+  * 無法容忍可變或長延遲運算（lock step）
+  * NOP 太多（沒找到足夠並行度）
+  * 靜態排程和 microarchitecture 綁得很緊：為某一代最佳化的程式碼，在下一代上可能表現很差
+* 正面意義：
+  * 為 VLIW 發展出的大部分編譯器最佳化，也被用在一般最佳化編譯器（包含 Superscalar 的編譯）
+  * 當並行度比較容易被編譯器找到時，VLIW 非常成功（傳統上是嵌入式、DSP、GPU）
+
+---
+
+### 編譯器端的代表性技術
+
+#### **Trace Scheduling**（Fisher, ELI-512 論文）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8f74432a-b1cf-4b1b-9188-ea5104ba860c" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/45a2b4a2-d4b9-4d90-99aa-38bc98c5c675" />
+
+
+#### **Basic Block Reordering**：
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/9ce1b5a0-513c-4da6-a7f3-d80e6c35520c" />
+
+
+  * likely-taken 分支會傷害 "always not taken" 預測的準確度，也讓靜態重排困難
+  * 做法：根據 profiling 重排 basic block，把 likely-taken 轉成 likely-not-taken
+  * Basic block：單一入口、單一出口的程式碼
+  * 例：控制流圖中 A 後面 99% 走 B、1% 走 C，Layout 1（A, B, D, C）的分支預測錯誤最少（Pettis & Hansen, PLDI 1990）
+    
+#### **Superblock**：
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/41f2bc97-28a1-4140-a2fd-0d2d8357a69e" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/50851693-a5a9-4e8a-9729-04874c30149f" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8b8aa2f7-4a8a-431f-8ade-1976d9f8195b" />
+
+
+  * 想法：把頻繁執行的 basic block 合併成「**單一入口、多個出口**」的較大區塊，大致會被當作直線程式碼執行
+  * 優點：減少分支預測錯誤；讓編譯器能在 superblock 內做更積極的最佳化與重排
+  * 缺點：程式碼變大、需要重新編譯、依賴 profile
+  * 形成方式：先找出一條 trace，再用 **tail duplication**（把 side entrance 之後的 basic block 複製一份，消除 side entrance）把 trace 轉成 superblock
+  * 範例：在 superblock 內，原本 `opC: mul r3 <- r2, 3` 在複製出 `opC'` 後，可以做 common subexpression elimination，把第二次乘法改成 `mov`（Hwu et al., 1993）
+    
+#### 其他列名：IMPACT（Chang et al., ISCA 1991）、Hyperblock（Mahlke et al., MICRO 1992，用於 predicated execution）、Bulldog VLIW 編譯器（John Ellis, 1984）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/5caad783-4bf7-4d7b-b990-671b72056927" />
+
+---
+
+### ISA 翻譯（ISA Translation）
+
+#### 想法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/df6076ba-89a7-4237-a116-9af91c2086c5" />
+
+
+* 可以把程式設計師看到的 ISA（virtual ISA）翻譯成另一個內部的 implementation ISA，藉此取得更好的取捨
+* 常見方向：Complex（CISC）轉 Simple（RISC）、Scalar ISA 轉 VLIW ISA
+
+#### 真實案例
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/1cc7907a-7512-4fa7-983b-220569f5d2b8" />
+
+
+* **Intel / AMD x86**：在硬體中把 x86 指令翻成程式設計師看不到的 micro-operations
+* **Transmeta**：用軟體（code morphing software）把 x86 翻成「秘密的」專屬 VLIW 指令
+* **Apple Rosetta 2**：二進位轉譯器（用於 Apple M1，2021）
+* **NVIDIA Denver**：ARM 處理器，搭配動態程式碼最佳化（Dynamic Code Optimization, DCO）
+  * 硬體解碼器會週期性地 profile 最近 taken 的分支，把分支歷史放進共享 buffer
+  * DCO 系統發現夠熱的程式碼後，把輸入的 ARM 程式碼最佳化成 microcode 執行區域
+  * 軟硬體共同設計的好處之一：DCO 軟體可以在現場升級，用來修正功能、效能或安全問題
+
+#### 與 Semantic Gap 的關係
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/332c0aa7-1ea8-4f77-8dc5-6137c9a7471d" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/94f5eac2-ef74-45d1-b014-968c90366a5d" />
+
+
+* Semantic gap：指令、資料型態、定址模式離高階語言（HLL）有多近
+  * 小 semantic gap（複雜指令的 ISA）：HLL 較容易映射到 ISA，軟體設計者工作較少、硬體設計者工作較多，最佳化負擔在硬體
+  * 大 semantic gap（簡單指令的 ISA）：映射較難，軟體工作較多、硬體工作較少，最佳化負擔在軟體
+* 透過軟體或硬體的翻譯器，把 ISA 轉成不同的 implementation ISA，就能改變這個取捨；軟體、翻譯器、硬體三者都可以做運算重排
+
+---
+
+### 其他
+
+* 投影片後段列出的是補充影片連結（Static Instruction Scheduling、ISA Tradeoffs 等往年課程），不是新的內容
+* Backup Slides（Fast & Wide Fetch、Trace Cache、Delayed Branching 等）標示為補充，課堂沒有講，這份筆記沒有展開
+
+---
+
+### 通用系統 vs 專用系統
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/03a74d19-1476-46cd-ae5b-dd1fe4b84d09" />
+
+| | General Purpose（CPU、GPU、FPGA） | Special Purpose（ASIC） |
+|---|---|---|
+| 特性 | 彈性高，可執行任何程式，容易程式設計與使用 | 效率與效能高 |
+| 缺點 | 效能與效率不是最佳 | （通常）難以程式設計與使用，不彈性，只能跑有限的程式 |
+| 範例 | Apple M1、Nvidia GTX 1070、Xilinx Spartan | Cerebras WSE-2 |
+
+Systolic Array 屬於「專用加速器」這一端。
+
+---
+
+### Systolic Array 是什麼
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/163a7fea-d88c-4538-a5b7-3631c0ee0fb8" />
+
+* 是一種**執行模型（execution model）**，實作「systolic computation」，**不同於 von Neumann，也不同於 dataflow**
+* 最初設計為專用加速器，用於：convolution、filtering、pattern matching、影像與視覺處理中特定的矩陣/向量運算、訊號處理、pattern recognition 等
+* 目前大量用在機器學習（專用的 ML 加速器）
+* 這個通用的執行模型可以被推廣（課程後面會看到）
+
+#### 動機與目標
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/1a3d5a7d-5465-4036-8926-1aa323f242de" />
+
+
+要設計的加速器需要：
+
+* 簡單、規則的設計（獨特元件的種類要少而規則）
+* 高並行度，帶來高效能
+* **運算與 I/O（記憶體）頻寬的平衡**
+
+#### 核心想法
+
+* 把**單一個處理單元（PE，Processing Element）換成一整個規則排列的 PE 陣列**，並仔細安排資料在 PE 之間流動的方式，讓它們共同把一份輸入資料轉換完，再輸出回記憶體
+* 好處：**對每一筆從記憶體取出的資料，盡可能做最多的運算**
+
+#### 心臟與血液的比喻（Kung, 1982）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/3174b5cb-da6c-4fe1-ae05-b0c1a686412c" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/6753c666-900e-49c6-8193-cc9c9e6db1ec" />
+
+
+| 比喻 | 對應 |
+|---|---|
+| 心臟 | Memory |
+| 血液 | Data |
+| 細胞 | PE |
+
+* Memory 像心臟一樣以有節奏的方式把資料「推」過許多 PE，資料在回到記憶體之前會經過很多處理單元
+* 像血液流動：心臟 → 許多細胞 → 心臟；不同細胞各自「處理」血液，很多血管同時運作，可以是多維的
+
+#### 與 Pipelining 的差異
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/39443a5f-f223-416f-baaa-c153418cc179" />
+
+
+* 這裡的單位是獨立的 PE
+* 陣列結構可以是非線性、多維的
+* PE 之間的連線可以是多方向的（速度也可以不同）
+* PE 可以有本地記憶體，並執行 kernel（而不是一條指令的某個階段）
+
+---
+
+### 背景：卷積（Convolution）與 CNN
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c1c02fee-b636-4fa9-9668-47dd44e2a8e1" />
+
+
+Systolic array 的經典範例是 convolution，用於 filtering、pattern matching、correlation、polynomial evaluation 與許多影像處理；在機器學習裡，CNN 可以有上百層卷積層。
+
+#### 2D Convolution 範例
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/443751f8-5717-46b0-92ad-9ddeccb55b9d" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8fdf33a1-9217-467d-bff7-14a58d0d9ff6" />
+
+
+* 輸入 5x5，kernel（filter）3x3，stride 1，padding 1，輸出 5x5
+* 輸出尺寸公式：`Output Dim = (Input + 2*Padding - Kernel) / Stride + 1`
+  * 代入：`(5 + 2*1 - 3) / 1 + 1 = 5`
+* 卷積層可以用**矩陣乘法**實作：把輸入特徵 unroll 成矩陣 X，濾波器排成矩陣 W，輸出特徵 Y 就是矩陣相乘的結果
+
+#### CNN 發展脈絡（投影片列舉）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/bfc69250-e12e-4300-bd1c-3fbe33801a15" />
+
+
+* LeNet-5：手寫數字辨識的 CNN
+* AlexNet（2012）：贏得 ImageNet 分類競賽，準確率比當時最佳高出約 10 個百分點
+* GoogLeNet（2014）：層數從 AlexNet 的 8 層增加到 22 層
+* ResNet（2015）：投影片以人類錯誤率 5.1% 作為對照基準
+* 小故事：ImageNet 獲勝的 Deep CNN 的 GPU 實作，出自修了 Hwu 的 Programming Massively Parallel Processors 課程的學生
+
+---
+
+### Systolic 卷積範例（1D）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c57c9450-252b-4201-8b61-69305df6da4c" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a6fa0491-4c63-4a74-b42d-5593448d9f6c" />
+
+
+目標：計算
+
+```
+y1 = w1*x1 + w2*x2 + w3*x3
+y2 = w1*x2 + w2*x3 + w3*x4
+y3 = w1*x3 + w2*x4 + w3*x5
+```
+
+從投影片的圖來看這個設計：
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/00b097c3-0827-42a5-9be6-28dc032f8670" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7a3c73cd-4120-479e-81a6-8f2b50c09bad" />
+
+
+* 每個 PE 內固定放一個權重（`w1`、`w2`、`w3`）
+* 輸入 `x` 從一側依序流進陣列，經過 latch 一格一格往前傳
+* 部分和 `y` 沿著另一個方向流動，每經過一個 PE 就加上 `w * x` 的乘積
+* 值得把**加法器與乘法器分開實作**，讓加法與乘法的執行可以互相重疊（overlap）
+* 要**仔細安排資料何時送進陣列、輸出何時被緩衝**；當陣列維度增加，或 PE 的延遲比較不可預測時，這件事會更複雜
+
+---
+
+### 2D Systolic Array：矩陣乘法範例
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/75c69830-6b02-4a4c-80cf-dd4393302c34" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/48b7e1de-beab-4330-a112-daaaaf515e02" />
+
+
+* 目標：計算兩個 3x3 矩陣相乘 `C = A x B`，**最終結果留在各個 PE 的累加器（accumulator）裡**
+* 每個 PE 有輸入 `M`（從左）、`N`（從上），輸出 `P`（往右）、`Q`（往下），內部有累加暫存器 `R`
+* PE 的動作：
+
+```
+P = M
+Q = N
+R = R + M * N
+```
+
+* 做法：A 的列從左邊送進、B 的行從上方送進，兩邊的資料在時間上呈現斜向錯開（補 0 對齊），資料在 PE 之間一格一格傳遞；每個 PE 在對應的時刻剛好收到需要相乘的 `a` 與 `b`，乘完累加進 `R`
+* 這個例子具體展示了「資料有節奏地流過陣列、每筆資料被多個 PE 重複使用」的概念
+
+#### 組合與串接
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/62830b84-7ef7-4ca8-aaf9-62e795b101f1" />
+
+
+* Systolic array 可以串接起來形成更強的系統
+* 投影片範例：一個可以即時對「到目前為止到達的所有資料」做最小平方擬合（least-squares fit）的 systolic 系統
+
+---
+
+### Systolic Array 的優缺點
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/0b03ed0d-7333-4983-9f04-4debe4891dd6" />
+
+
+#### **優點**
+
+* 有原則：有效利用有限的記憶體頻寬，讓運算與 I/O 頻寬取得平衡
+* 專用化（運算要符合 PE 的組織與功能）帶來：效率提升、設計簡單、高並行度與高效能
+* 用比較少的記憶體頻寬需求完成更多事
+
+#### **缺點**
+
+* 專用化的代價：**不具通用性**，因為運算必須符合 PE 的功能與組織
+
+---
+
+### 讓 Systolic Array 更有可程式性
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/540c9787-6f45-4381-9be6-49c1f73807d4" />
+
+
+* 每個 PE 可以儲存**多個權重**，並可在執行中動態切換（方便實作 adaptive filtering 等）
+* 更進一步：每個 PE 擁有自己的資料記憶體與指令記憶體
+  * 資料記憶體用來存部分/暫存結果與常數
+  * 這會走向 **stream processing、pipeline parallelism**，更一般來說就是 **staged execution（分階段執行）**
+
+#### Pipeline-Parallel（管線化）程式
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/71a0ee9e-e93b-46d2-a24d-3ecbe109d7d2" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/97420a5e-26db-4ccf-b977-662fe4595c49" />
+
+
+* 把迴圈的每次迭代切成若干「stage（階段）」的程式碼片段（例：`Compute1 -> A`、`Compute2 -> B`、`Compute3 -> C`）
+* 不同的 thread 在不同的 core 上執行不同的 stage
+* core 可以針對它所執行的運算做專用化
+* 投影片以「Pipelined File Compression」作為範例，這是把 systolic 的概念推廣到多核心軟體管線的例子（參考：Suleman et al., *Data Marshaling for Multi-core Architectures*, ISCA 2010）
+
+---
 
 [回目錄](#toc)
 
