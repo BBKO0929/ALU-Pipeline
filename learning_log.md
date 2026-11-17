@@ -11120,7 +11120,8 @@ Systolic array 的經典範例是 convolution，用於 filtering、pattern match
 <img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a6fa0491-4c63-4a74-b42d-5593448d9f6c" />
 
 
-目標：計算
+
+* 目標：計算
 
 ```
 y1 = w1*x1 + w2*x2 + w3*x3
@@ -11128,9 +11129,10 @@ y2 = w1*x2 + w2*x3 + w3*x4
 y3 = w1*x3 + w2*x4 + w3*x5
 ```
 
-從投影片的圖來看這個設計：
+* 從投影片的圖來看這個設計：
 <img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/00b097c3-0827-42a5-9be6-28dc032f8670" />
 <img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7a3c73cd-4120-479e-81a6-8f2b50c09bad" />
+
 
 
 * 每個 PE 內固定放一個權重（`w1`、`w2`、`w3`）
@@ -11144,6 +11146,7 @@ y3 = w1*x3 + w2*x4 + w3*x5
 ### 2D Systolic Array：矩陣乘法範例
 <img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/75c69830-6b02-4a4c-80cf-dd4393302c34" />
 <img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/48b7e1de-beab-4330-a112-daaaaf515e02" />
+
 
 
 * 目標：計算兩個 3x3 矩陣相乘 `C = A x B`，**最終結果留在各個 PE 的累加器（accumulator）裡**
