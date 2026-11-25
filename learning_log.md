@@ -1,4 +1,4 @@
-# 暑假自主研究與學習、Debug日誌
+<img width="959" height="716" alt="image" src="https://github.com/user-attachments/assets/e0613e51-35ba-46f3-ae2f-5a79ab05d68e" /><img width="960" height="716" alt="image" src="https://github.com/user-attachments/assets/c5ac46c0-2304-43ce-8ddb-42ef1a3c2c92" /><img width="959" height="717" alt="image" src="https://github.com/user-attachments/assets/8bf83919-af22-4bf2-a3a6-ae0a8d0fc0cd" /># 暑假自主研究與學習、Debug日誌
 - **[點我回「README.md」](./README.md)**
 
 
@@ -64,6 +64,7 @@
 | [10/20](#m10d20) | 刷題：複習 HDLBits 7/3 - 10/19 進度|
 | [10/27](#m10d27) | 資料：複習7/3 - 10/20 內容 |
 | [11/17](#m11d17) | 影片：Digital Design and Computer Architecture(Spring 2025) L17 |
+| [11/25](#m11d25) | 影片：Digital Design and Computer Architecture(Spring 2025) L18 |
 
 
 
@@ -11205,6 +11206,474 @@ R = R + M * N
 * 不同的 thread 在不同的 core 上執行不同的 stage
 * core 可以針對它所執行的運算做專用化
 * 投影片以「Pipelined File Compression」作為範例，這是把 systolic 的概念推廣到多核心軟體管線的例子（參考：Suleman et al., *Data Marshaling for Multi-core Architectures*, ISCA 2010）
+
+---
+
+[回目錄](#toc)
+
+---
+<a id="m11d25"></a>
+
+## 2026 年 11 月 25 日
+
+## 今日進度：
+### 資料：
+1. [Digital Design and Computer Architecture(Spring 2025)](https://safari.ethz.ch/ddca/spring2025/doku.php?id=start)
+2. [Digital Design and Computer Architecture, David Harris and Sarah Harris](https://www.sciencedirect.com/book/9780123704979/digital-design-and-computer-architecture)
+
+### 影片：
+1. [Digital Design and Computer Architecture(Spring 2025) L18](https://www.youtube.com/watch?v=GhFI92OD-Fo&list=PL5Q2soXY2Zi9Eo29LMgKVcaydS7V1zZW3&index=22)
+
+
+## 關鍵知識/詞彙：
+
+### Systolic Array 的優缺點
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/c99aced8-a31c-411f-bf5d-598642c178ca" />
+
+
+**優點**
+
+* 專用化，效率高
+* 每筆資料被重複使用多次，減少反覆從記憶體抓取，更有效利用記憶體頻寬
+* 高並行度
+* 資料流與控制流都很規則，容易實作
+
+**缺點**
+
+* 不擅長利用「不規則」的並行性
+* 專用化，不具通用性；需要軟體與程式設計師支援才能更通用
+* 如果問題不太符合陣列結構，很難寫程式
+
+---
+
+### Systolic Array 實例
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/ecc8e255-78af-4c93-b795-2b2251f6a0c0" />
+
+
+### WARP Computer（H. T. Kung, CMU, 1984 - 1988）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d66053ee-c478-4b2f-b724-1ed887b0eca3" />
+
+
+* 10 個 cell 組成的線性陣列，每個 cell 是 10 Mflop 的可程式處理器
+* 接在一台通用 host 機器上
+* 用高階語言加最佳化編譯器來寫程式
+* 大量用於加速視覺與機器人任務
+* 參考：Annaratone et al., *Warp Architecture and Implementation*, ISCA 1986
+
+#### Google TPU（現代 systolic array 的代表）
+
+**TPU v1（Jouppi et al., ISCA 2017）**
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/0bd11491-748f-4866-82ed-2182427f7beb" />
+
+
+* 以 PCIe 卡的形式插在伺服器裡
+* 核心是 Matrix Multiply Unit：資料從一側流入，partial sum 沿著陣列流動，最後進入 256 個 accumulator RAM（回顧：這就是 17b 的 2D systolic 矩陣乘法，結果留在累加器）
+
+**各世代差異（投影片列舉的數字）**
+
+| 世代 | 重點變化 |
+|---|---|
+| TPU v1 | 1 顆晶片，DDR3，整數/定點運算（23 TOPS），只做 inference |
+| TPU v2 | 4 顆晶片，High Bandwidth Memory，浮點運算，每顆 45 TFLOPS，可做 training 與 inference |
+| TPU v3 | 每顆 32GB HBM（v2 為 16GB），4 個 Matrix Unit（v2 為 2 個），每顆 90 TFLOPS |
+| TPU v4 | 2021 年每顆 250 TFLOPS，每個 board 1 ExaFLOPS；新增應用包括電腦視覺、NLP、推薦系統、下圍棋的強化學習 |
+
+* 另有整理三代 TPU 設計經驗的論文、TPUv4 的近期論文，以及 Google Edge TPU 的分析（Boroumand et al., PACT 2021）
+
+#### 資料搬移的能耗
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/3c733361-5fa9-4650-bacb-d154d8672225" />
+
+
+* 在大型 ML 模型中，系統總能耗超過 90% 花在記憶體
+* 對 Google 使用的 LSTM 與 Transducer 模型，超過 90% 的能耗花在 off-chip interconnect 與 DRAM
+* 這個結論呼應 systolic array 的核心訴求：讓每筆資料被多次使用，減少資料搬移
+
+#### 其他 ML 加速器
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/e1a4d09e-a619-4f21-b763-d3e20a01b559" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8701a317-a945-4345-a0af-8a3b77caabb7" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/33c0bdc4-fcc8-4e14-bcc5-318c32c15810" />
+
+
+* **Cerebras Wafer Scale Engine**：整片晶圓做成一顆晶片
+
+| 世代 | 核心數 | 電晶體數 | 面積 | 對照的最大 GPU |
+|---|---|---|---|---|
+| WSE（2019） | 400,000 | 1.2 兆 | 46,225 mm2 | NVIDIA TITAN V：211 億電晶體、815 mm2 |
+| WSE-2（2021） | 850,000 | 2.6 兆 | 46,225 mm2 | NVIDIA Ampere GA100：542 億電晶體、826 mm2 |
+| WSE-3（2023） | 投影片以 Hot Chips 2024 圖為主，無文字數據 | | | |
+
+* **Microsoft Brainwave**：FPGA 加速（投影片只有圖，無文字說明）
+
+---
+
+### Flynn's Taxonomy（Flynn 分類）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/71736308-9bc6-4fbc-b99a-166b2c50272c" />
+
+
+Mike Flynn, *Very High-Speed Computing Systems*, Proc. of IEEE, 1966。依「指令流」與「資料流」的數量分四類：
+
+| 類別 | 定義 | 代表形式 |
+|---|---|---|
+| SISD | 單一指令處理單一資料 | 一般純量處理器 |
+| SIMD | 單一指令處理多筆資料 | Array processor、Vector processor |
+| MISD | 多個指令處理單一資料 | 最接近的是 systolic array processor、streaming processor |
+| MIMD | 多個指令處理多筆資料（多個指令流） | Multiprocessor、Multithreaded processor |
+
+* Flynn 論文中的 MISD 範例，類似「廣義的 systolic array」
+* Flynn 論文中的 SIMD 範例，類似 array processor
+
+---
+
+### Data Parallelism 與 SIMD 的概念
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/5516e659-4982-4225-8de0-7168d3a2d6c5" />
+
+
+* **Data parallelism**：並行性來自「對不同資料做同一種運算」（例：兩個向量的 dot product）
+* 對照：
+  * Dataflow：並行性來自「用資料驅動方式平行執行不同運算」
+  * Thread（控制）並行：並行性來自「平行執行不同的控制執行緒」
+* SIMD 利用的是 operation-level parallelism：同一個運算同時作用在不同資料上，可視為 ILP 的一種，只是這些指令剛好相同
+
+#### SIMD 處理範式
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/9d5d74d8-f80b-41ed-9acf-4d060ca726dd" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a5b89553-e565-4046-8b09-30c51c0bc0d0" />
+
+
+* 單一指令作用在多筆資料上，可以「在時間上」或「在空間上」展開
+* 需要多個處理單元（PE，即 execution unit）
+* **Time-space duality（時間與空間的對偶）**：
+  * **Array processor**：一條指令在同一時間，用不同的空間（多個 PE）處理多筆資料
+  * **Vector processor**：一條指令在連續的時間步驟，用同一個空間（同一個 PE）處理多筆資料
+
+#### Array vs Vector Processor（以指令序列 LD、ADD、MUL、ST 為例）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/ee01f4a6-5b63-475c-b10b-e32b55ab69f3" />
+
+
+| | Array Processor | Vector Processor |
+|---|---|---|
+| 同一時間 | 多個 PE 做同一種運算（如 LD0 LD1 LD2 LD3 同時） | 不同的運算在不同時間點錯開，形成 pipeline |
+| 空間 | 不同的運算在不同空間（不同列） | 同一種運算固定在同一個空間 |
+| 直觀印象 | 橫向展開 | 縱向 pipeline |
+
+#### SIMD Array Processing vs VLIW
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/ea602288-4dee-4a03-93b1-a89c75eede0c" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/58045ee3-738d-4535-8058-e8e3a46b3d6a" />
+
+
+* VLIW：把多個彼此**獨立的不同運算**打包成一條長指令
+* Array processor：**單一運算**作用在多筆**不同的資料**上
+
+#### 向量暫存器（Vector Registers）
+
+* 每個 vector register 存 N 個 M-bit 的值，存的是整個向量而不是單一純量
+
+---
+
+### Vector Processors
+
+#### 基本概念
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/b67f3747-0166-4b8a-8173-23e7ddace65f" />
+
+
+* 向量是一維的數字陣列，許多科學與商業程式都用得到：
+
+```c
+for (i = 0; i <= 49; i++)
+    C[i] = (A[i] + B[i]) / 2;
+```
+
+* Vector processor 的指令是對向量運算，而不是對單一純量
+
+#### 基本需求
+
+1. **Vector registers**：載入與儲存向量
+2. **Vector length register（VLEN）**：處理不同長度的向量
+3. **Vector stride register（VSTR）**：向量元素在記憶體中可能不連續
+   * Stride：記憶體中兩個相鄰向量元素之間的距離
+
+#### Vector Stride 範例：矩陣乘法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/73f6e82a-b168-4f15-b166-c65abc5f38c9" />
+
+
+* A 為 4x6、B 為 6x10，皆以 row-major 順序存在記憶體，C = A x B 為 4x10
+* 載入 A 的一列（A0 到 A5）：位址每次加 1，**stride = 1**
+* 載入 B 的一行（B0 到 B50）：位址每次加 10（跳過一整列），**stride = 10**
+
+#### 向量指令的特性
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/84d4cbb0-a5c8-43be-9411-dde92ebcc571" />
+
+
+* 一條向量指令在連續的 cycle 內對每個元素做運算
+* 向量功能單元是 pipelined，每個 pipeline stage 處理不同的資料元素
+* 向量指令可以讓 pipeline 更深：
+  * 向量內部沒有相依性，所以向量內不需要硬體 interlock
+  * 向量內沒有控制流
+  * 已知 stride，容易計算所有元素的位址，因此容易載入甚至提早載入（prefetch）
+
+#### 優點
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/07dc5b6b-c47d-49cc-92d7-4147a06497c0" />
+
+
+* 向量內沒有相依性，pipelining 與平行化效果很好，可以用很深的 pipeline 又不付出深 pipeline 的代價
+* 一條指令產生大量工作：降低 instruction fetch 頻寬需求，把 fetch 與控制開銷攤到很多資料上，**每個運算的能源效率高**
+* 不需要明確寫迴圈，指令序列中的分支更少
+* 記憶體存取模式高度規則
+
+#### 缺點
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/871fb713-e45a-4200-9767-355a12fdd351" />
+
+
+* 只有在並行性規則（資料/SIMD 並行）時才有用；並行性不規則時非常沒效率（例：在 linked list 中搜尋 key）
+* 記憶體頻寬容易成為瓶頸，尤其是：
+  1. 運算與記憶體操作的比例不平衡
+  2. 資料沒有適當對應到記憶體 bank
+
+---
+
+### Amdahl's Law
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/812a53a2-f4e1-4f70-81ab-afb2185fa0c9" />
+
+
+```
+Speedup = 1 / ((1 - f) + f / N)
+```
+
+* `f`：程式中可平行化的比例
+* `N`：處理器數量
+* 最大加速比受「序列部分」限制，這是序列瓶頸（serial bottleneck）
+* 所有平行機器都有這個序列瓶頸（參考：Amdahl, AFIPS 1967）
+
+---
+
+### Vector Processing 細節
+
+#### Vector Registers 與控制暫存器
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4b8c2b74-b14d-4928-b022-0ecf697a212a" />
+
+
+* 控制暫存器：**VLEN、VSTR、VMASK**
+* 最大 VLEN 為 N，也就是一個 vector register 最多存放的元素數
+* **VMASK（Vector Mask Register）**：標示向量中哪些元素要被運算，由向量測試指令設定，例如 `VMASK[i] = (Vk[i] == 0)`
+
+#### Vector Functional Units
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/36d3822c-3f7f-4fa6-8b1e-5188520caf69" />
+
+
+* 用深 pipeline 執行逐元素運算，所以時脈週期可以很快
+* 因為向量元素彼此獨立，深 pipeline 的控制很簡單（例：六階段乘法 pipeline，`V1 * V2 -> V3`）
+
+#### 歷史機器：CRAY
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d0294551-4057-4bda-b4a3-3ce443c7790f" />
+
+
+* **CRAY-1**（Russell, CACM 1978）：
+  * 有純量與向量兩種模式
+  * 8 個 64 元素的向量暫存器，每個元素 64 bits
+  * 16 個記憶體 bank
+  * 8 個 64-bit 純量暫存器、8 個 24-bit 位址暫存器
+* CRAY X-MP：投影片展示 ETH 校內收藏的 CRAY X-MP-28 與其系統架構、功能單元、配置圖
+* Seymour Cray 名言：「如果你在犁田，你會選用兩頭強壯的牛，還是 1024 隻雞？」
+
+---
+
+### 向量記憶體系統
+
+#### 問題與解法
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/779cadfa-5fc8-4b47-8263-5b938f32b186" />
+
+
+* 要載入/儲存多個元素；假設 stride = 1，如果能每 cycle 開始一個元素的載入，就能維持**每 cycle 一個元素**的吞吐量
+* 問題：記憶體存取需要不只 1 個 cycle，怎麼辦？
+* 解法：**Memory Banking**，把記憶體分成可獨立存取的 bank，把元素交錯（interleave）分散在各 bank
+
+#### Memory Banking
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/90ddc32b-6e6d-45b1-bc6c-d97f12564c7a" />
+
+
+* 記憶體分成多個可獨立存取的 bank，各 bank 共用位址與資料匯流排（減少晶片腳位）
+* 每 cycle 可以開始並完成一次 bank 存取
+* 只要 N 個存取都落在不同 bank，就能同時維持 N 個並行存取
+
+#### Vector Memory System
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/95eabc5c-aaad-44f0-9dc1-728db7af9d7f" />
+
+
+* 下一個位址 = 前一個位址 + Stride
+* 如果同時滿足：stride = 1、連續元素交錯分佈於各 bank、**bank 數量 >= bank 延遲**，就能維持每 cycle 1 個元素的吞吐量
+
+---
+
+### 效能分析範例：Element-wise 平均
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/4be31dbe-4c0c-4c5b-9d14-db70ef9222c6" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/72bd0030-ed6f-4387-b91f-18e9c9b6bd9c" />
+
+
+```
+For i = 0 to 49
+    C[i] = (A[i] + B[i]) / 2
+```
+
+#### 純量程式碼
+
+```
+      MOVI R0 = 50                 1
+      MOVA R1 = A                  1
+      MOVA R2 = B                  1
+      MOVA R3 = C                  1
+  X:  LD   R4 = MEM[R1++]          11
+      LD   R5 = MEM[R2++]          11
+      ADD  R6 = R4 + R5            4
+      SHFR R7 = R6 >> 1            1
+      ST   MEM[R3++] = R7          11
+      DECBNZ R0, X                 2
+```
+
+* 共 **304 個動態指令**
+* In-order、1 個 bank：迴圈內前兩個 load 無法 pipeline（2 x 11 cycles），總計 `4 + 50 x 40 = 2004` cycles
+* 若有 2 個記憶體埠，或 2 個 bank（B 與 C 存在不同 bank）：前兩個 load 可以 pipeline（1 + 11 cycles），總計 `4 + 50 x 30 = 1504` cycles
+
+#### 向量程式碼（迴圈可向量化的條件：每次迭代彼此獨立）
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7dc90504-0bcd-44c0-982a-c94c42540a85" />
+
+
+```
+MOVI VLEN = 50            1
+MOVI VSTR = 1             1
+VLD   V0 = A              11 + VLEN - 1
+VLD   V1 = B              11 + VLEN - 1
+VADD  V2 = V0 + V1        4  + VLEN - 1
+VSHFR V3 = V2 >> 1        1  + VLEN - 1
+VST   C = V3              11 + VLEN - 1
+```
+
+* 只有 **7 個動態指令**
+
+#### 三種情境的 cycle 數比較
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/672da445-037f-4814-b1b4-246830b0aa51" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/a526ee1c-3c42-4ca3-b8ca-10eba53837dc" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/64db6c9c-f7e2-4909-bfde-9b3f9d409e26" />
+
+
+| 情境 | Cycle 數 | 說明 |
+|---|---|---|
+| 沒有 chaining，每個 bank 1 個埠 | **285** | 整個 vector register 必須完全 ready，後面的運算才能開始；用 16 個 bank（> 11 cycle 記憶體延遲）才能有足夠 bank 重疊存取來掩蓋延遲（前提：unit stride） |
+| 有 chaining，每個 bank 1 個埠 | **182** | 兩個 VLD 無法 pipeline、VLD 與 VST 也無法 pipeline，因為每個 bank 只有單一埠（記憶體頻寬瓶頸） |
+| chaining + 每個 bank 2 個 load 埠、1 個 store 埠 | **79** | 相較於純量 1504 cycles，約 **19 倍**的效能提升 |
+
+#### Vector Chaining（向量串接）
+
+* **Vector chaining**：把資料從一個向量功能單元直接轉送給另一個向量功能單元（類似 pipeline 的 data forwarding）
+* 例：`LV v1`、`MULV v3, v1, v2`、`ADDV v5, v3, v4`，Load Unit、Multiplier、Adder 之間串接，不必等整個結果向量寫進暫存器才開始下一步
+* 沒有 chaining 時，前一個運算的輸出不能直接當下一個運算的輸入，要等整個向量暫存器完成
+
+---
+
+### 向量處理的兩個實務問題
+
+#### 問題一：資料筆數超過向量暫存器容量 -> Stripmining
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/fe60f47e-7131-4387-9911-e6fb8ef44042" />
+
+
+* 做法：把迴圈拆開，讓每次迭代處理的元素數等於向量暫存器能容納的數量
+* 例：527 筆資料、64 元素的向量暫存器：8 次迭代 VLEN = 64，加上 1 次迭代 VLEN = 15（需要更改 VLEN 的值）
+* 這個技巧稱為 **vector stripmining**
+
+#### 問題二：向量資料在記憶體中不是等間隔排列 -> Gather / Scatter
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/28800368-14ee-42bd-8fb0-2b2f6eca7cbd" />
+
+
+* 做法：用間接定址（indirection）把元素組合/打包進向量暫存器
+* 這就是 **gather/scatter** 操作；也有助於避免對稀疏向量（大量元素為 0）做無用的運算
+* 要向量化的迴圈（含間接存取）：
+
+```c
+for (i = 0; i < N; i++)
+    A[i] = B[i] + C[D[i]];
+```
+
+* 向量程式碼（`LVI` 為 indexed load，即 gather）：
+
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/27062343-94c1-4092-b7f9-309c356de7b2" />
+
+
+```
+LV     vD, rD        # 載入索引向量 D
+LVI    vC, rC, vD    # 以 rC 為 base，用索引間接載入
+LV     vB, rB        # 載入 B 向量
+ADDV.D vA, vB, vC    # 做加法
+SV     vA, rA        # 儲存結果
+```
+
+* 硬體通常直接實作 gather/scatter，用來處理稀疏向量（矩陣）或間接索引；向量 load/store 用一個「索引向量」加上 base 暫存器來產生位址
+* Scatter 範例：索引向量 `[0, 2, 6, 7]`、資料向量 `[3.14, 6.5, 71.2, 2.71]`，寫入記憶體後 `Base+0 = 3.14`、`Base+2 = 6.5`、`Base+6 = 71.2`、`Base+7 = 2.71`，其他位置不變
+
+---
+
+### 迴圈中的條件運算：Masked Operations
+
+* 問題：如果某些運算依動態條件而不該執行？
+
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/8a2baf7c-ab22-4a99-97fa-3bdaa418950f" />
+
+
+```c
+for (i = 0; i < N; i++)
+    if (a[i] != 0)
+        b[i] = a[i] * b[i];
+```
+
+* 做法：用 **VMASK** 決定哪些元素不能被運算：
+
+```
+VLD   V0 = A
+VLD   V1 = B
+VMASK = (V0 != 0)
+VMUL  V1 = V0 * V1
+VST   B = V1
+```
+
+* 這其實就是 **predicated execution**：執行與否取決於 mask bit
+
+#### 另一個例子：取較大值
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/7eca58d8-a0cb-44c4-94a3-076727e0e659" />
+
+
+```c
+for (i = 0; i < 64; ++i)
+    if (a[i] >= b[i]) c[i] = a[i];
+    else              c[i] = b[i];
+```
+
+SIMD 執行步驟：
+
+1. 比較 A、B 得到 VMASK
+2. 對 C 做 masked store，存入 A
+3. 取 VMASK 的補數
+4. 對 C 做 masked store，存入 B
+
+#### Masked Vector Instructions 的兩種實作
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/5c6054af-b67b-490b-a88b-a43e27021860" />
+
+
+| 實作 | 做法 |
+|---|---|
+| Simple implementation | 對所有 N 個元素都執行運算，再依 mask 關閉結果的 writeback |
+| Density-time implementation | 掃描 mask 向量，只執行 mask 非零的元素 |
+
+* 投影片留下的思考題：哪一個比較好？取捨為何？（簡單實作的運算時間與元素總數成正比、與 mask 內容無關；density-time 能跳過被遮蔽的元素，但需要額外的掃描與較複雜的控制，這部分是我補充的分析，不是投影片的結論）
+
+---
+
+### 重點整理
+
+* Systolic array 的共同弱點是通用性與不規則並行性；TPU 與 Cerebras 是它在機器學習時代的延伸，而資料搬移的能耗是最大瓶頸
+* Flynn 分類是理解各種平行架構的座標系：SIMD 含 array 與 vector processor，systolic array 最接近 MISD
+* Array 與 Vector processor 是同一個概念在「空間」與「時間」上的對偶
+* Vector processor 的優勢來自：向量內無相依、一條指令帶來大量工作、記憶體存取規則；限制是只適合規則的資料並行，且記憶體頻寬容易成為瓶頸
+* 實際效能高度取決於記憶體系統（banking、記憶體埠數）與 chaining：同一段程式從純量 1504 cycles 降到 79 cycles
+* Stripmining、gather/scatter、masked operations 分別解決「資料太長」「資料不連續」「有條件的運算」三個實務問題
 
 ---
 
