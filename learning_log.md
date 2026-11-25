@@ -11283,6 +11283,7 @@ R = R + M * N
 
 #### 資料搬移的能耗
 <img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/3c733361-5fa9-4650-bacb-d154d8672225" />
+<img width="512" height="380" alt="image" src="https://github.com/user-attachments/assets/d5e7d310-025f-43de-902b-229b65c78752" />
 
 
 * 在大型 ML 模型中，系統總能耗超過 90% 花在記憶體
